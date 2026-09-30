@@ -86,7 +86,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;m
 <body>
 <div class="app" id="app">
 <header>
-  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.0</span></h1>
+  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.1</span></h1>
   <input class="title" id="title" placeholder="설계 이름 (예: 3주차 반가산기)">
   <span class="sp"></span>
   <button class="hbtn" id="bSim" style="background:#6b3fd1;border-color:#8a63e6">시뮬레이션 창 열기</button>
@@ -201,7 +201,7 @@ const M = 1.5 * P;                    // 여백
 const COLS = ['A','B','C','D','E','F','G','H','I','J'];
 const COLX = [0,1,2,3,4,7,8,9,10,11]; // 스트립 안 열 위치(피치 단위), E-F 사이 홈
 const WIRE_COLORS = ['#d22f2f','#222222','#f2f2f2','#2f6fed','#1f9d55','#f0b400','#f07a1a','#8b4fd8'];
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.1';
 const STORE_AUTO = 'jamsil-bb-autosave-v1';
 const STORE_LIB = 'jamsil-bb-library-v1';
 
@@ -1414,11 +1414,15 @@ function simulate(){
       else val.set(n, 'X');
     });
     const strong = new Map(val);
-    resistors.forEach(([a,b]) => [[a,b],[b,a]].forEach(([x,y]) => {
-      if(strong.has(x) || !strong.has(y)) return;
-      const v = strong.get(y), cur = val.get(x);
-      if(cur===undefined){ val.set(x, v); weak.add(x); } else if(cur!==v) val.set(x, 'X');
-    }));
+    // 저항 사슬을 따라 약한 값을 퍼뜨린다(직렬 저항 여러 개도 통과). 강한 넷에서 멈춘다.
+    const adj = new Map(); const link = (x,y) => { if(!adj.has(x)) adj.set(x, []); adj.get(x).push(y); };
+    resistors.forEach(([a,b]) => { if(a!==b){ link(a,b); link(b,a); } });
+    const reach = new Map();
+    strong.forEach((v, src) => {
+      const seen = new Set([src]), q = [src];
+      while(q.length){ const x = q.shift(); (adj.get(x)||[]).forEach(y => { if(seen.has(y) || strong.has(y)) return; seen.add(y); q.push(y); if(!reach.has(y)) reach.set(y, new Set()); reach.get(y).add(v); }); }
+    });
+    reach.forEach((vs, n) => { weak.add(n); val.set(n, vs.size===1 ? [...vs][0] : 'X'); });
     return {val, conf, weak, drv};
   };
   const family = simState.family;
