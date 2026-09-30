@@ -1,0 +1,1823 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>잠실 브레드보드 편집기</title>
+<style>
+:root{--bg:#eef0f3;--panel:#fff;--ink:#1d2330;--muted:#6b7280;--line:#d9dce3;--accent:#2f6fed;--accent-soft:#e6eefe;--danger:#c93434;--warn:#b27a00;--ok:#1f8a4c}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.45 system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{display:grid;grid-template-columns:240px 1fr 330px;grid-template-rows:46px 1fr 30px;height:100vh}
+header{grid-column:1/4;display:flex;align-items:center;gap:6px;padding:0 10px;background:#1d2330;color:#fff}
+header h1{font-size:14px;margin:0 10px 0 2px;white-space:nowrap}
+header input.title{background:#2c3446;border:1px solid #3c465c;color:#fff;border-radius:6px;padding:4px 8px;width:220px}
+header .sp{flex:1}
+.hbtn{background:#2c3446;border:1px solid #3c465c;color:#fff;border-radius:6px;padding:4px 9px;cursor:pointer;white-space:nowrap}
+.hbtn:hover{background:#39445b}
+aside{background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:10px}
+aside.right{border-right:none;border-left:1px solid var(--line);padding:0;display:flex;flex-direction:column}
+h3{font-size:12px;color:var(--muted);margin:12px 0 6px;font-weight:600;letter-spacing:.02em}
+h3:first-child{margin-top:0}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tool{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 6px;cursor:pointer;text-align:left}
+.tool b{display:block;font-size:13px}
+.tool span{font-size:11px;color:var(--muted)}
+.tool.on{border-color:var(--accent);background:var(--accent-soft)}
+.swatches{display:flex;flex-wrap:wrap;gap:5px}
+.sw{width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);cursor:pointer}
+.sw.on{box-shadow:0 0 0 2px var(--accent)}
+.row{display:flex;gap:6px;align-items:center;margin:4px 0}
+.row label{min-width:52px;color:var(--muted);font-size:12px}
+.row input[type=text],.row input[type=number],.row select{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:#fff}
+input.search{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 8px;margin-bottom:6px}
+.plist{border:1px solid var(--line);border-radius:8px;max-height:calc(100vh - 470px);min-height:160px;overflow:auto}
+.pcat{font-size:11px;color:var(--muted);padding:6px 8px 2px;background:#f7f8fa;position:sticky;top:0}
+.pitem{padding:5px 8px;cursor:pointer;border-top:1px solid #f1f2f5;display:flex;justify-content:space-between;gap:6px}
+.pitem:hover{background:#f5f7fb}
+.pitem.on{background:var(--accent-soft)}
+.pitem small{color:var(--muted);text-align:right}
+.btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer}
+.btn:hover{background:#f5f7fb}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{color:var(--danger)}
+.btn.sm{padding:2px 7px;font-size:12px}
+main{position:relative;overflow:hidden;display:flex;flex-direction:column}
+.zoombar{position:absolute;right:12px;top:10px;z-index:3;display:flex;gap:4px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:3px}
+.zoombar button{border:none;background:none;cursor:pointer;padding:3px 8px;border-radius:5px}
+.zoombar button:hover{background:#f0f2f6}
+.hint{position:absolute;left:12px;top:10px;z-index:3;background:rgba(29,35,48,.88);color:#fff;border-radius:8px;padding:6px 10px;font-size:12px;max-width:60%}
+.canvas{flex:1;overflow:auto;padding:52px 20px 20px}
+svg#board{display:block;margin:0 auto;user-select:none}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tab{flex:1;padding:9px 4px;text-align:center;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted)}
+.tab.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.tab .badge[hidden]{display:none}
+.tab .badge{display:inline-block;min-width:16px;padding:0 4px;border-radius:8px;background:var(--danger);color:#fff;font-size:10px;margin-left:3px}
+.tabbody{padding:12px;overflow:auto;flex:1}
+.muted{color:var(--muted)}
+table.pins{width:100%;border-collapse:collapse;font-size:12px}
+table.pins td,table.pins th{border-bottom:1px solid #eef0f3;padding:3px 4px;text-align:left}
+table.pins th{color:var(--muted);font-weight:500}
+.issue{border-left:3px solid var(--warn);background:#fffaf0;padding:6px 8px;margin:6px 0;border-radius:4px;cursor:pointer}
+.issue.err{border-color:var(--danger);background:#fff4f4}
+.issue.info{border-color:#8aa0c8;background:#f5f8fd}
+.okbox{border-left:3px solid var(--ok);background:#f1faf4;padding:8px;border-radius:4px}
+footer{grid-column:1/4;background:#fff;border-top:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 12px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden}
+footer b{color:var(--ink);font-weight:600}
+.kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;font-size:11px;background:#fafbfc}
+textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;min-height:70px}
+.postrow{display:grid;grid-template-columns:22px 1fr 70px;gap:4px;align-items:center;margin:4px 0}
+.postrow input[type=color]{width:22px;height:22px;border:none;padding:0;background:none}
+.postrow input,.postrow select{border:1px solid var(--line);border-radius:6px;padding:3px 5px;min-width:0}
+/* svg */
+.hole{fill:#43413c}
+.hole.v1{fill:#e5484d}.hole.v0{fill:#3b6fe0}.hole.w1{fill:#f2a0a2}.hole.w0{fill:#9fb8ef}.hole.vx{fill:#a24be0}
+.hole.hl{fill:#ffb400}
+.hole.hov{fill:#2f6fed}
+.hole.pend{fill:#e0005a}
+.mode-wire .partsL,.mode-part .partsL,.mode-wire .wiresL,.mode-part .wiresL{pointer-events:none}
+.sel-outline{fill:none;stroke:#2f6fed;stroke-width:2;stroke-dasharray:4 3}
+.wire{cursor:pointer}
+.pg{cursor:pointer}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+<header>
+  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.0</span></h1>
+  <input class="title" id="title" placeholder="설계 이름 (예: 3주차 반가산기)">
+  <span class="sp"></span>
+  <button class="hbtn" id="bSim" style="background:#6b3fd1;border-color:#8a63e6">시뮬레이션 창 열기</button>
+  <button class="hbtn" id="bUndo" title="Ctrl+Z">되돌리기</button>
+  <button class="hbtn" id="bRedo" title="Ctrl+Y">다시</button>
+  <button class="hbtn" id="bNew">새로</button>
+  <button class="hbtn" id="bOpen">열기</button>
+  <button class="hbtn" id="bSave">저장(JSON)</button>
+  <button class="hbtn" id="bPng">그림 저장(PNG)</button>
+  <input type="file" id="fileIn" accept=".json,application/json" hidden>
+</header>
+
+<aside>
+  <h3>도구</h3>
+  <div class="tools">
+    <div class="tool on" data-tool="select"><b>선택·확인</b><span>V · 넷 확인</span></div>
+    <div class="tool" data-tool="wire"><b>배선</b><span>W · 두 구멍 클릭</span></div>
+    <div class="tool" data-tool="part"><b>부품</b><span>P · 목록에서 선택</span></div>
+    <div class="tool" data-tool="delete"><b>삭제</b><span>D · 클릭해서 제거</span></div>
+  </div>
+  <h3>선 색</h3>
+  <div class="swatches" id="swatches"></div>
+  <h3>부품 설정</h3>
+  <div class="row"><label>값</label><input type="text" id="pValue" placeholder="예: 330Ω, 10µF"></div>
+  <div class="row"><label>방향</label><select id="pOrient"></select></div>
+  <div class="row"><label style="min-width:auto"><input type="checkbox" id="pNames" checked> IC 핀 이름 표시 (N)</label></div>
+  <h3>부품 목록</h3>
+  <input class="search" id="psearch" placeholder="검색 (예: 7408, LED, 스위치)">
+  <div class="plist" id="plist"></div>
+</aside>
+
+<main id="main">
+  <div class="hint" id="hint"></div>
+  <div class="zoombar"><button id="zOut">−</button><button id="zFit" title="폭 맞춤 ↔ 전체 보기">맞춤</button><button id="zIn">+</button></div>
+  <div class="canvas" id="canvas"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg></div>
+</main>
+
+<aside class="right">
+  <div class="tabs">
+    <div class="tab on" data-tab="info">정보</div>
+    <div class="tab" data-tab="check">점검<span class="badge" id="badge" hidden>0</span></div>
+    <div class="tab" data-tab="add">부품 추가</div>
+    <div class="tab" data-tab="settings">보드 설정</div>
+  </div>
+  <div class="tabbody" id="tab-info"></div>
+  <div class="tabbody" id="tab-check" hidden></div>
+  <div class="tabbody" id="tab-add" hidden>
+    <p class="muted" style="margin-top:0">실험에 새 소자가 나오면 여기서 만든다. 만든 부품은 이 컴퓨터의 부품 목록과 설계 파일에 함께 저장된다.</p>
+    <div class="row"><label>종류</label><select id="nKind">
+      <option value="dip">DIP IC (홈에 걸침)</option>
+      <option value="two">2핀 소자 (저항·LED 등)</option>
+      <option value="sip">일렬 N핀 (스위치·헤더 등)</option>
+    </select></div>
+    <div class="row"><label>이름</label><input type="text" id="nName" placeholder="예: 74LS90"></div>
+    <div class="row"><label>설명</label><input type="text" id="nDesc" placeholder="예: 10진 카운터"></div>
+    <div class="row"><label>기호</label><input type="text" id="nRef" placeholder="U, R, D, SW …" value="U"></div>
+    <div class="row" id="rowPins"><label>핀 수</label><input type="number" id="nPins" value="14" min="1" max="48"></div>
+    <div class="row" id="rowWidth"><label>DIP 폭</label><select id="nWidth"><option value="3">0.3인치 (보통 IC)</option><option value="6">0.6인치 (넓은 IC)</option></select></div>
+    <div class="row" id="rowStyle" hidden><label>모양</label><select id="nStyle">
+      <option value="resistor">저항</option><option value="led">LED</option><option value="cap">세라믹 커패시터</option>
+      <option value="ecap">전해 커패시터(극성)</option><option value="diode">다이오드</option><option value="button">버튼</option><option value="generic">일반</option>
+    </select></div>
+    <div class="row" id="rowColor" hidden><label>색</label><input type="text" id="nColor" placeholder="LED 색 예: #e33"></div>
+    <div class="row" id="rowPower"><label>VCC 핀</label><input type="number" id="nVcc" placeholder="예: 14"><label style="min-width:auto">GND</label><input type="number" id="nGnd" placeholder="예: 7"></div>
+    <div style="margin:6px 0 2px" class="muted">핀 이름 (1번부터 순서대로, 쉼표나 줄바꿈으로 구분)</div>
+    <textarea id="nNames" placeholder="예: 1A, 1B, 1Y, 2A, 2B, 2Y, GND, 3Y, 3A, 3B, 4Y, 4A, 4B, VCC"></textarea>
+    <div class="row" id="rowSim" hidden><label>시뮬</label><select id="nSim"><option value="">동작 없음 (헤더 등)</option><option value="spdt">SPDT 스위치 (3핀, 가운데 공통)</option></select></div>
+    <div style="margin:8px 0 2px" class="muted">동작 정의 (시뮬레이션용, 비워도 된다). 데이터시트의 진리표를 식으로 옮긴다. 문법은 README 참고.</div>
+    <textarea id="nLogic" style="font-family:ui-monospace,Consolas,monospace;min-height:90px" placeholder="예:&#10;1Y = !(1A &amp; 1B)&#10;let s = A ^ B&#10;SUM = s ^ CIN&#10;연산: ! 부정, &amp; AND, | OR, ^ XOR, 조건 ? 참 : 거짓&#10;상수 0 1 X(모름) · #번호로 핀 지정 · # 로 시작하는 줄은 메모"></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn primary" id="nAdd">부품 목록에 추가</button><button class="btn" id="nCancel" hidden>수정 취소</button><span class="muted" id="nMsg"></span></div>
+    <h3>내가 만든 부품</h3>
+    <div id="myParts"></div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="libExport">부품 목록 내보내기</button><button class="btn" id="libImport">가져오기</button></div>
+    <input type="file" id="libIn" accept=".json" hidden>
+  </div>
+  <div class="tabbody" id="tab-settings" hidden>
+    <p class="muted" style="margin-top:0">실측 결과가 나오면 여기 값만 바꾼다. 기본값은 사진 판독과 제조사 사양(WBU-208 계열)에서 나온 추정이다.</p>
+    <div class="row"><label>스트립 행 수</label><input type="number" id="sRows" min="20" max="80"></div>
+    <div class="row"><label style="min-width:auto"><input type="checkbox" id="sSplitV"> 세로 레일이 가운데서 끊김 (위/아래 분리)</label></div>
+    <div class="row"><label style="min-width:auto"><input type="checkbox" id="sSplitT"> 상단 가로 레일이 가운데서 끊김 (좌/우 분리)</label></div>
+    <div class="row"><label style="min-width:auto"><input type="checkbox" id="sFlip"> 행 번호 뒤집기 (1이 아래쪽)</label></div>
+    <h3>바인딩 포스트 (왼쪽부터)</h3>
+    <div id="postEdit"></div>
+    <p class="muted">VCC/GND: IC 전원. <b>입력(전압원)</b>: 전원 공급기 채널로 논리 입력을 넣는 포스트. 시뮬레이션 창에서 전압(예: 0V/5V)을 정한다. 모든 채널의 − 단자는 GND 포스트와 공통이라고 가정한다. 역할을 VCC/GND로 정하면 점검에서 IC 전원 연결을 그 포스트 기준으로 따진다. 포스트는 보드 내부와 연결돼 있지 않다고 가정한다. 레일까지 선을 직접 그어야 한다.</p>
+    <button class="btn primary" id="sApply">설정 적용</button>
+    <h3>사용법</h3>
+    <div class="muted" style="line-height:1.7">
+      <span class="kbd">V</span> 선택 · <span class="kbd">W</span> 배선 · <span class="kbd">P</span> 부품 · <span class="kbd">D</span> 삭제<br>
+      <span class="kbd">R</span> 부품 방향 전환 · <span class="kbd">N</span> 핀 이름 표시 · <span class="kbd">Esc</span> 취소<br>
+      <span class="kbd">Ctrl</span>+<span class="kbd">Z</span> 되돌리기 · <span class="kbd">Ctrl</span>+<span class="kbd">Y</span> 다시 · <span class="kbd">Delete</span> 선택 항목 삭제<br>
+      2핀 소자는 <b>처음 클릭한 쪽이 1번 핀</b>이다. LED는 애노드(+), 전해 커패시터는 +, 다이오드는 애노드.<br>
+      선택 도구로 구멍을 클릭하면 전기적으로 이어진 구멍이 전부 노랗게 빛난다.
+    </div>
+  </div>
+</aside>
+
+<footer>
+  <span>위치: <b id="stHole">-</b></span>
+  <span>넷: <b id="stNet">-</b></span>
+  <span id="stExtra"></span>
+  <span class="sp" style="flex:1"></span>
+  <span id="stCount"></span>
+</footer>
+</div>
+
+<script>
+'use strict';
+/* ================= 상수 ================= */
+const NS = 'http://www.w3.org/2000/svg';
+const P = 14;                         // 구멍 간격(0.1인치) 픽셀
+const M = 1.5 * P;                    // 여백
+const COLS = ['A','B','C','D','E','F','G','H','I','J'];
+const COLX = [0,1,2,3,4,7,8,9,10,11]; // 스트립 안 열 위치(피치 단위), E-F 사이 홈
+const WIRE_COLORS = ['#d22f2f','#222222','#f2f2f2','#2f6fed','#1f9d55','#f0b400','#f07a1a','#8b4fd8'];
+const APP_VERSION = '1.0';
+const STORE_AUTO = 'jamsil-bb-autosave-v1';
+const STORE_LIB = 'jamsil-bb-library-v1';
+
+/* ================= 기본 부품 목록 ================= */
+const G4 = '1A 1B 1Y 2A 2B 2Y GND 3Y 3A 3B 4Y 4A 4B VCC';
+function dip(id, desc, cat, n, names, vcc, gnd, width){
+  return {id, name:id, desc, cat, kind:'dip', pins:n, pinNames:names.split(' '), vcc, gnd, width:width||3, ref:'U'};
+}
+const BUILTIN = [
+  dip('7400','쿼드 2입력 NAND','게이트',14,G4,14,7),
+  dip('7402','쿼드 2입력 NOR','게이트',14,'1Y 1A 1B 2Y 2A 2B GND 3A 3B 3Y 4A 4B 4Y VCC',14,7),
+  dip('7404','헥스 인버터(NOT)','게이트',14,'1A 1Y 2A 2Y 3A 3Y GND 4Y 4A 5Y 5A 6Y 6A VCC',14,7),
+  dip('7408','쿼드 2입력 AND','게이트',14,G4,14,7),
+  dip('7410','트리플 3입력 NAND','게이트',14,'1A 1B 2A 2B 2C 2Y GND 3Y 3A 3B 3C 1Y 1C VCC',14,7),
+  dip('7411','트리플 3입력 AND','게이트',14,'1A 1B 2A 2B 2C 2Y GND 3Y 3A 3B 3C 1Y 1C VCC',14,7),
+  dip('7420','듀얼 4입력 NAND','게이트',14,'1A 1B NC 1C 1D 1Y GND 2Y 2A 2B NC 2C 2D VCC',14,7),
+  dip('7432','쿼드 2입력 OR','게이트',14,G4,14,7),
+  dip('7486','쿼드 2입력 XOR','게이트',14,G4,14,7),
+  dip('7474','듀얼 D 플립플롭','플립플롭',14,'/1CLR 1D 1CLK /1PRE 1Q /1Q GND /2Q 2Q /2PRE 2CLK 2D /2CLR VCC',14,7),
+  dip('74112','듀얼 JK 플립플롭','플립플롭',16,'1CLK 1K 1J /1PRE 1Q /1Q /2Q GND 2Q /2PRE 2J 2K 2CLK /2CLR /1CLR VCC',16,8),
+  dip('74138','3→8 디코더','조합 MSI',16,'A B C /G2A /G2B G1 /Y7 GND /Y6 /Y5 /Y4 /Y3 /Y2 /Y1 /Y0 VCC',16,8),
+  dip('74151','8→1 멀티플렉서','조합 MSI',16,'D3 D2 D1 D0 Y /W /G GND C B A D7 D6 D5 D4 VCC',16,8),
+  dip('74153','듀얼 4→1 멀티플렉서','조합 MSI',16,'/1G B 1C3 1C2 1C1 1C0 1Y GND 2Y 2C0 2C1 2C2 2C3 A /2G VCC',16,8),
+  dip('74157','쿼드 2→1 멀티플렉서','조합 MSI',16,'S 1A 1B 1Y 2A 2B 2Y GND 3Y 3B 3A 4Y 4B 4A /G VCC',16,8),
+  dip('74283','4비트 전가산기','조합 MSI',16,'Σ2 B2 A2 Σ1 A1 B1 C0 GND C4 Σ4 B4 A4 Σ3 A3 B3 VCC',16,8),
+  dip('7447','BCD→7세그 디코더','조합 MSI',16,'B C /LT /BI /RBI D A GND e d c b a g f VCC',16,8),
+  dip('74161','4비트 동기 카운터','순차 MSI',16,'/CLR CLK A B C D ENP GND /LOAD ENT QD QC QB QA RCO VCC',16,8),
+  dip('74163','4비트 동기 카운터(동기 CLR)','순차 MSI',16,'/CLR CLK A B C D ENP GND /LOAD ENT QD QC QB QA RCO VCC',16,8),
+  dip('74193','4비트 업/다운 카운터','순차 MSI',16,'B QB QA DOWN UP QC QD GND D C /LOAD /CO /BO CLR A VCC',16,8),
+  dip('74194','4비트 양방향 시프트 레지스터','순차 MSI',16,'/CLR SR A B C D SL GND S0 S1 CLK QD QC QB QA VCC',16,8),
+  dip('NE555','555 타이머','기타 IC',8,'GND TRIG OUT /RESET CTRL THR DIS VCC',8,1),
+  dip('DIP-8','빈 8핀 IC','기타 IC',8,'1 2 3 4 5 6 7 8',null,null),
+  dip('DIP-14','빈 14핀 IC','기타 IC',14,'1 2 3 4 5 6 7 8 9 10 11 12 13 14',null,null),
+  dip('DIP-16','빈 16핀 IC','기타 IC',16,'1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16',null,null),
+  {id:'R',name:'저항',desc:'2핀',cat:'2핀 소자',kind:'two',pins:2,pinNames:['1','2'],style:'resistor',ref:'R',value:'330Ω'},
+  {id:'LED-R',name:'LED 빨강',desc:'1번=애노드(+)',cat:'2핀 소자',kind:'two',pins:2,pinNames:['A(+)','K(−)'],style:'led',color:'#e02b2b',ref:'LED'},
+  {id:'LED-G',name:'LED 초록',desc:'1번=애노드(+)',cat:'2핀 소자',kind:'two',pins:2,pinNames:['A(+)','K(−)'],style:'led',color:'#1faa45',ref:'LED'},
+  {id:'LED-Y',name:'LED 노랑',desc:'1번=애노드(+)',cat:'2핀 소자',kind:'two',pins:2,pinNames:['A(+)','K(−)'],style:'led',color:'#f0c000',ref:'LED'},
+  {id:'C',name:'세라믹 커패시터',desc:'2핀',cat:'2핀 소자',kind:'two',pins:2,pinNames:['1','2'],style:'cap',ref:'C',value:'0.1µF'},
+  {id:'CE',name:'전해 커패시터',desc:'1번=+',cat:'2핀 소자',kind:'two',pins:2,pinNames:['+','−'],style:'ecap',ref:'C',value:'10µF'},
+  {id:'DIODE',name:'다이오드',desc:'1번=애노드',cat:'2핀 소자',kind:'two',pins:2,pinNames:['A','K'],style:'diode',ref:'D'},
+  {id:'BTN',name:'푸시 버튼(2핀)',desc:'2핀',cat:'2핀 소자',kind:'two',pins:2,pinNames:['1','2'],style:'button',ref:'SW'},
+  {id:'SPDT',name:'슬라이드 스위치 SPDT',desc:'3핀 · 가운데 공통',cat:'일렬 소자',kind:'sip',pins:3,pinNames:['A','COM','B'],style:'switch',ref:'SW'},
+  {id:'POT',name:'가변저항',desc:'3핀 · 가운데 와이퍼',cat:'일렬 소자',kind:'sip',pins:3,pinNames:['1','W','3'],style:'pot',ref:'VR',value:'10kΩ'},
+  {id:'NPN',name:'NPN 트랜지스터(TO-92)',desc:'핀 순서는 데이터시트 확인',cat:'일렬 소자',kind:'sip',pins:3,pinNames:['E','B','C'],style:'to92',ref:'Q'},
+  {id:'SIP-4',name:'핀 헤더 4핀',desc:'일렬',cat:'일렬 소자',kind:'sip',pins:4,pinNames:['1','2','3','4'],style:'header',ref:'J'}
+];
+
+/* ================= 상태 ================= */
+function defaultSettings(){
+  return {rows:64, splitV:true, splitT:true, flip:false, posts:[
+    {label:'빨강', color:'#d22f2f', role:'VCC'},
+    {label:'초록', color:'#1f9d55', role:'IN'},
+    {label:'파랑', color:'#2f6fed', role:'IN'},
+    {label:'검정', color:'#222222', role:'GND'}
+  ]};
+}
+let S = {meta:{title:''}, settings:defaultSettings(), library:[], wires:[], parts:[], nextId:1};
+let userLib = loadUserLib();
+let undoStack = [], redoStack = [];
+let tool = 'select', wireColor = WIRE_COLORS[0], curPartId = null, orient = 'up';
+let pending = null;            // 배선/2핀 첫 클릭 구멍
+let hoverId = null;
+let selection = null;          // {type:'net'|'part'|'wire', id}
+let zoom = 1;
+let nodes = new Map();         // id -> node
+let nodeList = [];
+let netCache = null;
+let showPinNames = true;
+
+/* ================= 유틸 ================= */
+function el(tag, attrs, parent, text){
+  const e = document.createElementNS(NS, tag);
+  if(attrs) for(const k in attrs) if(attrs[k]!==undefined && attrs[k]!==null) e.setAttribute(k, attrs[k]);
+  if(text!==undefined) e.textContent = text;
+  if(parent) parent.appendChild(e);
+  return e;
+}
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function tryGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function trySet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+function loadUserLib(){ try{ const v = JSON.parse(tryGet(STORE_LIB)||'[]'); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
+function saveUserLib(){ trySet(STORE_LIB, JSON.stringify(userLib)); }
+function allParts(){
+  const map = new Map();
+  BUILTIN.forEach(p => map.set(p.id, p));
+  userLib.forEach(p => map.set(p.id, p));
+  S.library.forEach(p => { if(!map.has(p.id)) map.set(p.id, p); });
+  return map;
+}
+function partDef(id){ return allParts().get(id); }
+function rowLabel(r){ return S.settings.flip ? (S.settings.rows + 1 - r) : r; }
+
+/* ================= 보드 기하 ================= */
+let geom = {};
+function vGroups(){ // 세로 레일 구멍 행 위치(스트립 행 기준)
+  const R = S.settings.rows, list = [];
+  for(let r = 3; r + 4 <= R - 2; r += 6){ for(let i=0;i<5;i++) list.push(r+i); }
+  return list;
+}
+function buildGeometry(){
+  nodes = new Map(); nodeList = [];
+  const R = S.settings.rows;
+  const W = M*2 + (5*3 + 4*15)*P;
+  const postsY = M + 1.2*P;
+  const topY = M + 3.2*P;                // 상단 레일 시작
+  const stripTop = topY + 7*P;           // 문자 라벨 줄
+  const rowY = r => stripTop + (r + 0.5)*P;
+  const H = stripTop + (R + 2.2)*P + M;
+  geom = {W, H, postsY, topY, stripTop, rowY, strips:[], vbus:[], tbus:[]};
+  let x = M;
+  const vRows = vGroups();
+  const halfV = Math.floor(vRows.length/2);
+  for(let p=0;p<5;p++){
+    const xm = x + 1*P, xp = x + 2*P;
+    geom.vbus.push({x, xm, xp});
+    vRows.forEach((r,k) => {
+      addNode({id:`V${p}m${k}`, x:xm, y:rowY(r), kind:'V', p, sign:'-', k, upper:k<halfV});
+      addNode({id:`V${p}p${k}`, x:xp, y:rowY(r), kind:'V', p, sign:'+', k, upper:k<halfV});
+    });
+    x += 3*P;
+    if(p<4){
+      const s = p+1, x0 = x;
+      geom.strips.push({s, x:x0});
+      for(let r=1;r<=R;r++){
+        for(let c=0;c<10;c++){
+          addNode({id:`S${s}${COLS[c]}${r}`, x:x0 + (2 + COLX[c])*P, y:rowY(r), kind:'S', s, c, r});
+        }
+      }
+      x += 15*P;
+    }
+  }
+  // 상단 가로 레일 2줄
+  // 레일 하나 = 5구멍 묶음 10개(왼쪽 5 + 오른쪽 5) = 50구멍. 보드 정중앙 기준 좌우대칭.
+  const T_GROUPS = 10, tSpan = T_GROUPS*6 - 1;          // 피치 단위 59칸
+  const tFirst = W/2 - (tSpan - 1)/2*P;                  // 첫 구멍 중심
+  const tx0 = tFirst - 0.5*P, tx1 = tFirst + (tSpan - 1)*P + 0.5*P;
+  const tPos = []; for(let i=0;i<tSpan;i++){ if(i%6!==5) tPos.push(i); }
+  const halfT = tPos.length/2;
+  for(let t=1;t<=2;t++){
+    const y0 = topY + (t-1)*3.4*P;
+    geom.tbus.push({t, y:y0, yp:y0 + 0.9*P, ym:y0 + 1.9*P, x0:tx0, x1:tx1});
+    tPos.forEach((i,k) => {
+      addNode({id:`T${t}p${k}`, x:tFirst + i*P, y:y0 + 0.9*P, kind:'T', t, sign:'+', k, left:k<halfT});
+      addNode({id:`T${t}m${k}`, x:tFirst + i*P, y:y0 + 1.9*P, kind:'T', t, sign:'-', k, left:k<halfT});
+    });
+  }
+  // 포스트
+  S.settings.posts.forEach((po,i) => {
+    addNode({id:`POST${i}`, x: W - M - (3.5 - i)*4.2*P - 1*P, y: postsY, kind:'POST', i});
+  });
+}
+function addNode(n){ nodes.set(n.id, n); nodeList.push(n); }
+function groupOf(n){
+  switch(n.kind){
+    case 'S': return `S${n.s}r${n.r}${n.c<5?'L':'R'}`;
+    case 'V': return `V${n.p}${n.sign}` + (S.settings.splitV ? (n.upper?'U':'D') : '');
+    case 'T': return `T${n.t}${n.sign}` + (S.settings.splitT ? (n.left?'L':'R') : '');
+    default: return n.id;
+  }
+}
+function holeName(id){
+  const n = nodes.get(id); if(!n) return id;
+  const sg = n.sign==='+'?'+':'−';
+  switch(n.kind){
+    case 'S': return `S${n.s}-${COLS[n.c]}${rowLabel(n.r)}`;
+    case 'V': return `세로레일 P${n.p} ${sg}${S.settings.splitV?(n.upper?' 위':' 아래'):''}`;
+    case 'T': return `상단레일 T${n.t} ${sg}${S.settings.splitT?(n.left?' 왼쪽':' 오른쪽'):''}`;
+    case 'POST': return `포스트 ${S.settings.posts[n.i].label}`;
+  }
+  return id;
+}
+
+/* ================= 넷 계산 ================= */
+function computeNets(){
+  const parent = new Map();
+  const find = a => { let r=a; while(parent.has(r) && parent.get(r)!==r) r=parent.get(r); let c=a; while(parent.has(c) && parent.get(c)!==r){ const nx=parent.get(c); parent.set(c,r); c=nx; } return r; };
+  const uni = (a,b) => { if(!parent.has(a)) parent.set(a,a); if(!parent.has(b)) parent.set(b,b); const ra=find(a), rb=find(b); if(ra!==rb) parent.set(ra,rb); };
+  nodeList.forEach(n => { const g = groupOf(n); if(!parent.has(g)) parent.set(g,g); });
+  S.wires.forEach(w => { const a=nodes.get(w.a), b=nodes.get(w.b); if(a&&b) uni(groupOf(a), groupOf(b)); });
+  simSwitchUnions((a,b) => { if(a && b) uni(a,b); });
+  const netOfHole = id => { const n = nodes.get(id); return n ? find(groupOf(n)) : null; };
+  // 넷 이름
+  const names = new Map(); const roles = {};
+  S.settings.posts.forEach((po,i) => { if(po.role==='VCC'||po.role==='GND'){ const r = netOfHole(`POST${i}`); if(!names.has(r)) names.set(r, po.role); else if(names.get(r)!==po.role) names.set(r, 'VCC+GND 단락'); roles[po.role]=roles[po.role]||[]; roles[po.role].push(r); } });
+  // 사용 중인 넷에 번호
+  let k = 1;
+  const used = [];
+  S.wires.forEach(w => used.push(netOfHole(w.a), netOfHole(w.b)));
+  S.parts.forEach(p => p.pins.forEach(h => used.push(netOfHole(h))));
+  used.forEach(r => { if(r && !names.has(r)) names.set(r, 'N'+(k++)); });
+  netCache = {find, netOfHole, names, roles};
+  return netCache;
+}
+function nets(){ return netCache || computeNets(); }
+function netName(root){ return nets().names.get(root) || '(연결 없음)'; }
+
+/* ================= 렌더링 ================= */
+const svg = document.getElementById('board');
+let L = {};
+function drawBoard(){
+  buildGeometry();
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox', `0 0 ${geom.W} ${geom.H}`);
+  applyZoom();
+  const defs = el('defs', null, svg);
+  const st = el('style', null, defs);
+  st.textContent = `.hole{fill:#43413c}.hole.v1{fill:#e5484d}.hole.v0{fill:#3b6fe0}.hole.w1{fill:#f2a0a2}.hole.w0{fill:#9fb8ef}.hole.vx{fill:#a24be0}.hole.hl{fill:#ffb400}.hole.hov{fill:#2f6fed}.hole.pend{fill:#e0005a}text{font-family:system-ui,"Segoe UI","Malgun Gothic",sans-serif}`;
+  L.base = el('g', {class:'baseL'}, svg);
+  L.holes = el('g', {class:'holesL'}, svg);
+  L.parts = el('g', {class:'partsL'}, svg);
+  L.wires = el('g', {class:'wiresL'}, svg);
+  L.over = el('g', {class:'overL', 'pointer-events':'none'}, svg);
+  L.ghost = el('g', {class:'ghostL', 'pointer-events':'none', opacity:.6}, svg);
+  const g = L.base;
+  el('rect', {x:0, y:0, width:geom.W, height:geom.H, rx:10, fill:'#23252b'}, g);
+  // 포스트
+  S.settings.posts.forEach((po,i) => {
+    const n = nodes.get(`POST${i}`);
+    el('circle', {cx:n.x, cy:n.y, r:P*0.95, fill:po.color, stroke:'#000', 'stroke-width':1}, g);
+    el('circle', {cx:n.x, cy:n.y, r:P*0.35, fill:'#c9b27a', stroke:'#6b5a2e'}, g);
+    el('text', {x:n.x, y:n.y + P*1.9, 'text-anchor':'middle', 'font-size':10, fill:'#ddd'}, g, po.label + (po.role==='IN' ? ' (입력)' : po.role!=='none' ? ` (${po.role})` : ''));
+  });
+  el('text', {x:M, y:geom.postsY + 4, 'font-size':12, fill:'#bbb', 'font-weight':600}, g, S.meta.title || '잠실 브레드보드');
+  // 상단 레일
+  geom.tbus.forEach(tb => {
+    el('rect', {x:tb.x0 - 0.6*P, y:tb.y, width:tb.x1 - tb.x0 + 1.2*P, height:2.8*P, rx:3, fill:'#f1ead5', stroke:'#d8cfb2'}, g);
+    // 레일이 끊겼으면 색선도 가운데서 끊어 그린다 (실물과 동일)
+    const hline = (yy, col) => {
+      if(S.settings.splitT){ const mx = (tb.x0 + tb.x1)/2, gap = 0.6*P;
+        el('line', {x1:tb.x0, y1:yy, x2:mx - gap, y2:yy, stroke:col, 'stroke-width':1.2}, g);
+        el('line', {x1:mx + gap, y1:yy, x2:tb.x1, y2:yy, stroke:col, 'stroke-width':1.2}, g);
+      } else el('line', {x1:tb.x0, y1:yy, x2:tb.x1, y2:yy, stroke:col, 'stroke-width':1.2}, g);
+    };
+    hline(tb.yp - 0.5*P, '#d33'); hline(tb.ym + 0.5*P, '#2f5fd0');
+    el('text', {x:tb.x0 - 0.35*P, y:tb.yp + 3, 'font-size':9, fill:'#d33', 'text-anchor':'middle'}, g, '+');
+    el('text', {x:tb.x0 - 0.35*P, y:tb.ym + 3, 'font-size':10, fill:'#2f5fd0', 'text-anchor':'middle'}, g, '−');
+    if(S.settings.splitT){ const mx = (tb.x0 + tb.x1)/2; el('line', {x1:mx, y1:tb.y + 2, x2:mx, y2:tb.y + 2.8*P - 2, stroke:'#b44', 'stroke-width':1, 'stroke-dasharray':'2 2'}, g); }
+    el('text', {x:tb.x1 + 0.35*P, y:tb.y + 1.6*P, 'font-size':9, fill:'#8a8266', 'text-anchor':'middle'}, g, 'T'+tb.t);
+  });
+  // 세로 레일
+  const R = S.settings.rows;
+  const y0 = geom.stripTop - 0.2*P, y1 = geom.rowY(R) + 1.2*P;
+  geom.vbus.forEach((vb,p) => {
+    el('rect', {x:vb.x + 0.2*P, y:y0, width:2.6*P, height:y1 - y0, rx:3, fill:'#f1ead5', stroke:'#d8cfb2'}, g);
+    const vr0 = vGroups(), vh = Math.floor(vr0.length/2), vmid = (geom.rowY(vr0[vh-1]) + geom.rowY(vr0[vh]))/2;
+    const vline = (xx, col) => {
+      if(S.settings.splitV){
+        el('line', {x1:xx, y1:y0 + P, x2:xx, y2:vmid - 0.6*P, stroke:col, 'stroke-width':1.2}, g);
+        el('line', {x1:xx, y1:vmid + 0.6*P, x2:xx, y2:y1 - P, stroke:col, 'stroke-width':1.2}, g);
+      } else el('line', {x1:xx, y1:y0 + P, x2:xx, y2:y1 - P, stroke:col, 'stroke-width':1.2}, g);
+    };
+    vline(vb.xm - 0.55*P, '#2f5fd0'); vline(vb.xp + 0.55*P, '#d33');
+    el('text', {x:vb.xm, y:y0 + 0.75*P, 'font-size':10, fill:'#2f5fd0', 'text-anchor':'middle'}, g, '−');
+    el('text', {x:vb.xp, y:y0 + 0.75*P, 'font-size':10, fill:'#d33', 'text-anchor':'middle'}, g, '+');
+    el('text', {x:(vb.xm+vb.xp)/2, y:y1 - 0.25*P, 'font-size':8, fill:'#8a8266', 'text-anchor':'middle'}, g, 'P'+p);
+    if(S.settings.splitV){
+      const vr = vGroups(); const half = Math.floor(vr.length/2);
+      const ym = (geom.rowY(vr[half-1]) + geom.rowY(vr[half]))/2;
+      el('line', {x1:vb.x + 0.3*P, y1:ym, x2:vb.x + 2.7*P, y2:ym, stroke:'#b44', 'stroke-width':1, 'stroke-dasharray':'2 2'}, g);
+    }
+  });
+  // 단자 스트립
+  geom.strips.forEach(sp => {
+    el('rect', {x:sp.x + 0.3*P, y:y0, width:14.4*P, height:y1 - y0, rx:3, fill:'#f3ecd6', stroke:'#d8cfb2'}, g);
+    el('rect', {x:sp.x + (2+4+0.75)*P, y:y0 + 0.2*P, width:1.5*P, height:y1 - y0 - 0.4*P, fill:'#e3dac0'}, g);
+    COLS.forEach((c,i) => {
+      const cx = sp.x + (2 + COLX[i])*P;
+      el('text', {x:cx, y:geom.stripTop + 0.3*P, 'font-size':9, fill:'#6d6552', 'text-anchor':'middle'}, g, c);
+      el('text', {x:cx, y:geom.rowY(R) + 1.05*P, 'font-size':9, fill:'#6d6552', 'text-anchor':'middle'}, g, c);
+    });
+    for(let r=1;r<=R;r++){
+      const lab = rowLabel(r);
+      if(lab===1 || lab%5===0){
+        el('text', {x:sp.x + 0.95*P, y:geom.rowY(r) + 3, 'font-size':8, fill:'#6d6552', 'text-anchor':'middle'}, g, lab);
+        el('text', {x:sp.x + 14.05*P, y:geom.rowY(r) + 3, 'font-size':8, fill:'#6d6552', 'text-anchor':'middle'}, g, lab);
+      }
+    }
+    el('text', {x:sp.x + 7.5*P, y:geom.rowY(R) + 2*P, 'font-size':9, fill:'#aaa', 'text-anchor':'middle'}, g, 'S'+sp.s);
+  });
+  // 구멍
+  const hs = 0.56*P;
+  nodeList.forEach(n => {
+    if(n.kind==='POST'){ n.el = el('circle', {cx:n.x, cy:n.y, r:P*0.95, fill:'transparent', class:'posthit'}, L.holes); return; }
+    n.el = el('rect', {x:n.x - hs/2, y:n.y - hs/2, width:hs, height:hs, rx:1, class:'hole'}, L.holes);
+  });
+  renderItems();
+}
+function applyZoom(){ svg.setAttribute('width', Math.round(geom.W*zoom)); svg.setAttribute('height', Math.round(geom.H*zoom)); }
+
+function renderItems(){
+  netCache = null;
+  if(SIM) simulate();
+  L.parts.innerHTML = ''; L.wires.innerHTML = ''; L.over.innerHTML = '';
+  S.parts.forEach(drawPart);
+  S.wires.forEach(drawWire);
+  refreshHighlights();
+  refreshInfo();
+  if(SIM){ drawPostOverlays(); renderSimIssues(false); renderSimPanel(); } else runChecks(false);
+  updateCount();
+}
+function pt(id){ const n = nodes.get(id); return n ? [n.x, n.y] : [0,0]; }
+function drawWire(w){
+  const [x1,y1] = pt(w.a), [x2,y2] = pt(w.b);
+  const g = el('g', {class:'wire', 'data-wire':w.id}, L.wires);
+  const dx = x2-x1, dy = y2-y1, len = Math.hypot(dx,dy) || 1;
+  const bulge = Math.min(len*0.18, 3*P);
+  const mx = (x1+x2)/2 - dy/len*bulge, my = (y1+y2)/2 + dx/len*bulge;
+  const d = `M${x1},${y1} Q${mx},${my} ${x2},${y2}`;
+  const light = w.color.toLowerCase()==='#f2f2f2';
+  el('path', {d, fill:'none', stroke:'#000', 'stroke-opacity':light?.55:.35, 'stroke-width':0.42*P + 2, 'stroke-linecap':'round'}, g);
+  el('path', {d, fill:'none', stroke:w.color, 'stroke-width':0.42*P, 'stroke-linecap':'round'}, g);
+  [[x1,y1],[x2,y2]].forEach(([x,y]) => el('circle', {cx:x, cy:y, r:0.22*P, fill:'#bbb', stroke:'#555', 'stroke-width':.8}, g));
+  if(selection && selection.type==='wire' && selection.id===w.id){
+    el('path', {d, fill:'none', stroke:'#2f6fed', 'stroke-width':0.42*P + 6, 'stroke-opacity':.35, 'stroke-linecap':'round'}, g);
+  }
+}
+function partColorBody(def){ return {resistor:'#dcc08a', cap:'#e0913a', ecap:'#26324a', diode:'#1d1d1d', button:'#555', generic:'#777'}[def.style] || '#777'; }
+function drawPartBase(p){
+  const def = partDef(p.partId);
+  const g = el('g', {class:'pg', 'data-part':p.id}, L.parts);
+  if(!def){ p.pins.forEach(h => { const [x,y]=pt(h); el('circle',{cx:x,cy:y,r:P*.4,fill:'#f0f'},g); }); return; }
+  const P2 = p.pins.map(pt);
+  const isSel = selection && selection.type==='part' && selection.id===p.id;
+  if(def.kind==='dip'){
+    const xs = P2.map(q=>q[0]), ys = P2.map(q=>q[1]);
+    const xl = Math.min(...xs), xr = Math.max(...xs), yt = Math.min(...ys), yb = Math.max(...ys);
+    P2.forEach(([x,y]) => el('rect', {x:x - 0.3*P, y:y - 0.14*P, width:0.6*P, height:0.28*P, fill:'#c9c9c9'}, g));
+    const bx = xl + 0.38*P, bw = xr - xl - 0.76*P, by = yt - 0.5*P, bh = yb - yt + P;
+    el('rect', {x:bx, y:by, width:bw, height:bh, rx:2, fill:'#1e1e1e', stroke:isSel?'#2f6fed':'#000', 'stroke-width':isSel?2.5:1}, g);
+    const up = p.orient!=='down';
+    const ny = up ? by : by + bh;
+    el('path', {d:`M${bx + bw/2 - 0.35*P},${ny} A${0.35*P},${0.35*P} 0 0 ${up?0:1} ${bx + bw/2 + 0.35*P},${ny}`, fill:'#444'}, g);
+    const half = def.pins/2;
+    p.pins.forEach((h,i) => {
+      const [x,y] = pt(h);
+      const leftSide = x === xl;
+      el('text', {x: leftSide ? bx + 1.5 : bx + bw - 1.5, y:y + 2, 'font-size':5.5, fill:'#bdbdbd', 'text-anchor': leftSide?'start':'end'}, g, String(i+1));
+      if(showPinNames){
+        const nm = (def.pinNames && def.pinNames[i]) || String(i+1);
+        const tx = leftSide ? xl - 0.45*P : xr + 0.45*P;
+        const tw = Math.max(1, nm.length) * 4.3 + 4;
+        el('rect', {x: leftSide ? tx - tw : tx, y:y - 4.6, width:tw, height:9.2, rx:2, fill:'#1d2330', 'fill-opacity':.82}, L.over);
+        el('text', {x: leftSide ? tx - 2 : tx + 2, y:y + 2.6, 'font-size':7, fill:'#fff', 'text-anchor': leftSide?'end':'start'}, L.over, nm);
+      }
+    });
+    const cx = bx + bw/2, cy = by + bh/2;
+    el('text', {x:cx, y:cy + 2.5, 'font-size':Math.min(7.5, bw*0.3), fill:'#9fd3ff', 'text-anchor':'middle', transform:`rotate(-90 ${cx} ${cy})`, 'font-weight':600}, g, `${p.ref} ${def.name}`);
+    // 1번 핀 점
+    const [p1x,p1y] = P2[0];
+    el('circle', {cx: p1x === xl ? bx + 0.35*P : bx + bw - 0.35*P, cy: up ? by + 0.35*P : by + bh - 0.35*P, r:1.6, fill:'#777'}, g);
+  } else if(def.kind==='two'){
+    const [x1,y1] = P2[0], [x2,y2] = P2[1];
+    const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1, ang=Math.atan2(dy,dx)*180/Math.PI;
+    const mx=(x1+x2)/2, my=(y1+y2)/2;
+    el('line', {x1, y1, x2, y2, stroke:'#9a9a9a', 'stroke-width':1.6}, g);
+    [[x1,y1],[x2,y2]].forEach(([x,y]) => el('circle', {cx:x, cy:y, r:1.8, fill:'#888'}, g));
+    const bl = Math.min(len*0.62, 2.6*P);
+    const bg = el('g', {transform:`translate(${mx} ${my}) rotate(${ang})`}, g);
+    if(def.style==='led'){
+      el('circle', {cx:0, cy:0, r:0.78*P, fill:def.color||'#e33', 'fill-opacity':.85, stroke:isSel?'#2f6fed':'#333', 'stroke-width':isSel?2.5:1}, bg);
+      el('rect', {x:0.55*P, y:-0.85*P, width:0.2*P, height:1.7*P, fill:'#333', opacity:.5}, bg);
+    } else if(def.style==='cap'){
+      el('ellipse', {cx:0, cy:0, rx:Math.min(bl/2,0.8*P), ry:0.55*P, fill:'#e0913a', stroke:isSel?'#2f6fed':'#8a4f14', 'stroke-width':isSel?2.5:1}, bg);
+    } else {
+      el('rect', {x:-bl/2, y:-0.38*P, width:bl, height:0.76*P, rx:0.3*P, fill:partColorBody(def), stroke:isSel?'#2f6fed':'#333', 'stroke-width':isSel?2.5:.8}, bg);
+      if(def.style==='resistor'){ [-0.3,-0.1,0.1].forEach(f => el('rect', {x:f*bl - 1.2, y:-0.38*P, width:2.4, height:0.76*P, fill:['#6b3b1c','#111','#b5651d'][Math.round((f+0.3)/0.2)]}, bg)); }
+      if(def.style==='ecap'){ el('rect', {x:bl/2 - 0.3*P, y:-0.38*P, width:0.22*P, height:0.76*P, fill:'#ccc'}, bg); }
+      if(def.style==='diode'){ el('rect', {x:bl/2 - 0.35*P, y:-0.38*P, width:0.2*P, height:0.76*P, fill:'#ddd'}, bg); }
+    }
+    const lab = `${p.ref}${p.value?' '+p.value:''}`;
+    el('text', {x:mx, y:my - 0.95*P, 'font-size':7.5, fill:'#fff', stroke:'#000', 'stroke-width':2, 'paint-order':'stroke', 'text-anchor':'middle'}, g, lab);
+    if(def.style==='led'||def.style==='ecap'||def.style==='diode'){
+      el('text', {x:x1 + (x1<=x2?-0.5:0.5)*P, y:y1 - 0.45*P, 'font-size':8, fill:'#fff', stroke:'#000', 'stroke-width':2, 'paint-order':'stroke', 'text-anchor':'middle'}, g, '+');
+    }
+  } else { // sip
+    const xs = P2.map(q=>q[0]), ys = P2.map(q=>q[1]);
+    const xl = Math.min(...xs) - 0.5*P, xr = Math.max(...xs) + 0.5*P, yt = Math.min(...ys) - 0.5*P, yb = Math.max(...ys) + 0.5*P;
+    const fill = {switch:'#3b3f46', pot:'#1d4f9c', to92:'#1b1b1b', header:'#111'}[def.style] || '#555';
+    el('rect', {x:xl, y:yt, width:xr-xl, height:yb-yt, rx:def.style==='to92'?5:2, fill, stroke:isSel?'#2f6fed':'#000', 'stroke-width':isSel?2.5:1, 'fill-opacity':.92}, g);
+    P2.forEach(([x,y],i) => {
+      el('circle', {cx:x, cy:y, r:1.8, fill:'#ccc'}, g);
+      const nm = (def.pinNames && def.pinNames[i]) || String(i+1);
+      const vert = (xr - xl) < (yb - yt);
+      el('text', {x: vert ? x + 0.35*P : x, y: vert ? y + 2 : y - 0.2*P, 'font-size':5.5, fill:'#eee', 'text-anchor': vert?'start':'middle'}, g, nm);
+    });
+    if(def.style==='switch'){
+      const vert = (xr - xl) < (yb - yt);
+      if(vert) el('rect', {x:xl + 0.15*P, y:(yt+yb)/2 - 0.9*P, width:0.35*P, height:0.9*P, fill:'#ddd'}, g);
+      else el('rect', {x:(xl+xr)/2 - 0.9*P, y:yt + 0.1*P, width:0.9*P, height:0.3*P, fill:'#ddd'}, g);
+    }
+    el('text', {x:xr + 2, y:yt + 7, 'font-size':7.5, fill:'#fff', stroke:'#000', 'stroke-width':2, 'paint-order':'stroke'}, g, `${p.ref}${p.value?' '+p.value:''}`);
+  }
+}
+
+/* ================= 하이라이트 ================= */
+function refreshHighlights(){
+  const N = nets();
+  let root = null;
+  if(selection && selection.type==='net') root = selection.id;
+  nodeList.forEach(n => {
+    if(n.kind==='POST'){ n.el.setAttribute('stroke', (root && N.netOfHole(n.id)===root) ? '#ffb400' : 'none'); n.el.setAttribute('stroke-width', 4); return; }
+    const on = root && N.netOfHole(n.id)===root;
+    n.el.setAttribute('class', 'hole' + simCls(n) + (on?' hl':'') + (n.id===hoverId?' hov':'') + (pending===n.id?' pend':''));
+  });
+}
+function setHover(id){
+  if(hoverId===id) return;
+  const old = hoverId; hoverId = id;
+  [old, id].forEach(h => { if(!h) return; const n = nodes.get(h); if(!n || n.kind==='POST') return;
+    const N = nets(); const root = selection && selection.type==='net' ? selection.id : null;
+    n.el.setAttribute('class', 'hole' + simCls(n) + (root && N.netOfHole(n.id)===root?' hl':'') + (n.id===hoverId?' hov':'') + (pending===n.id?' pend':''));
+  });
+  updateStatus();
+}
+function updateStatus(){
+  const N = nets();
+  if(!hoverId){ $('#stHole').textContent='-'; $('#stNet').textContent='-'; $('#stExtra').textContent=''; return; }
+  $('#stHole').textContent = holeName(hoverId);
+  $('#stNet').textContent = netName(N.netOfHole(hoverId)) + (SIM && simRes ? ' = ' + valText(simRes.val.get(N.netOfHole(hoverId)), simRes.weak.has(N.netOfHole(hoverId))) : '');
+  const occ = occupantsOf(hoverId);
+  $('#stExtra').textContent = occ.map(o => o.label).join(' · ');
+}
+function occupantsOf(h){
+  const res = [];
+  S.parts.forEach(p => p.pins.forEach((x,i) => { if(x===h){ const d = partDef(p.partId); res.push({type:'part', id:p.id, label:`${p.ref} ${d?d.name:'?'} ${i+1}번 ${d&&d.pinNames?d.pinNames[i]:''}`}); } }));
+  S.wires.forEach(w => { if(w.a===h||w.b===h) res.push({type:'wire', id:w.id, label:'선'}); });
+  return res;
+}
+
+/* ================= 편집 동작 ================= */
+function snapshot(){ return JSON.stringify({wires:S.wires, parts:S.parts, library:S.library, nextId:S.nextId, settings:S.settings}); }
+function commit(fn){
+  undoStack.push(snapshot()); if(undoStack.length>200) undoStack.shift();
+  redoStack = [];
+  fn();
+  renderItems(); autosave();
+}
+function restore(js){
+  const o = JSON.parse(js); const boardChanged = JSON.stringify(o.settings) !== JSON.stringify(S.settings);
+  S.wires=o.wires; S.parts=o.parts; S.library=o.library||[]; S.nextId=o.nextId; if(o.settings) S.settings=o.settings;
+  selection=null; pending=null;
+  if(boardChanged){ drawBoard(); if(!$('#tab-settings').hidden) fillSettings(); } else renderItems();
+  autosave();
+}
+function undo(){ if(!undoStack.length) return; redoStack.push(snapshot()); restore(undoStack.pop()); }
+function redo(){ if(!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); }
+function newId(pfx){ return pfx + (S.nextId++); }
+function nextRef(prefix){
+  let m = 0; const re = new RegExp('^' + prefix.replace(/[^A-Za-z]/g,'') + '(\\d+)$');
+  S.parts.forEach(p => { const k = re.exec(p.ref); if(k) m = Math.max(m, +k[1]); });
+  return prefix + (m+1);
+}
+function occupied(h){ if(!h || h.startsWith('POST')) return false; return S.parts.some(p => p.pins.includes(h)) || S.wires.some(w => w.a===h || w.b===h); }
+function addWire(a, b){
+  commit(() => { S.wires.push({id:newId('w'), a, b, color:wireColor}); });
+}
+function ensureLibCopy(def){
+  if(!BUILTIN.some(b => b.id===def.id) && !S.library.some(l => l.id===def.id)) S.library.push(JSON.parse(JSON.stringify(def)));
+}
+function addPart(def, pins, o){
+  commit(() => {
+    ensureLibCopy(def);
+    S.parts.push({id:newId('p'), partId:def.id, ref:nextRef(def.ref||'X'), value:($('#pValue').value.trim() || def.value || ''), pins, orient:o});
+  });
+}
+function removeItem(type, id){
+  commit(() => {
+    if(type==='wire') S.wires = S.wires.filter(w => w.id!==id);
+    if(type==='part') S.parts = S.parts.filter(p => p.id!==id);
+    if(selection && selection.id===id) selection = null;
+  });
+}
+/* DIP / SIP 핀 좌표 계산 */
+function dipPins(def, anchorId, o){
+  const n = nodes.get(anchorId); if(!n || n.kind!=='S') return {err:'DIP IC는 단자 스트립 구멍에만 꽂을 수 있다.'};
+  const half = def.pins/2, w = def.width || 3, R = S.settings.rows;
+  const colAt = x => COLX.indexOf(x);
+  const pins = [];
+  if(o!=='down'){
+    if(n.c>4) return {err:'노치가 위일 때 1번 핀은 A–E 쪽(왼쪽)에 둔다.'};
+    const rc = colAt(COLX[n.c] + w); if(rc<5) return {err:'오른쪽 핀 줄이 F–J에 안 걸린다. 1번 핀 열을 바꿔라.'};
+    if(n.r + half - 1 > R) return {err:'아래로 행이 모자란다.'};
+    for(let i=0;i<half;i++) pins.push(`S${n.s}${COLS[n.c]}${n.r+i}`);
+    for(let i=0;i<half;i++) pins.push(`S${n.s}${COLS[rc]}${n.r+half-1-i}`);
+  } else {
+    if(n.c<5) return {err:'노치가 아래일 때 1번 핀은 F–J 쪽(오른쪽)에 둔다.'};
+    const lc = colAt(COLX[n.c] - w); if(lc<0 || lc>4) return {err:'왼쪽 핀 줄이 A–E에 안 걸린다. 1번 핀 열을 바꿔라.'};
+    if(n.r - half + 1 < 1) return {err:'위로 행이 모자란다.'};
+    for(let i=0;i<half;i++) pins.push(`S${n.s}${COLS[n.c]}${n.r-i}`);
+    for(let i=0;i<half;i++) pins.push(`S${n.s}${COLS[lc]}${n.r-half+1+i}`);
+  }
+  return {pins};
+}
+function sipPins(def, anchorId, o){
+  const n = nodes.get(anchorId); if(!n || n.kind!=='S') return {err:'일렬 소자는 단자 스트립 구멍에 꽂는다.'};
+  const pins = [];
+  if(o==='h'){
+    for(let i=0;i<def.pins;i++){
+      const c = n.c + i;
+      if(c>9 || (n.c<5) !== (c<5)) return {err:'가로로는 홈을 건너 놓을 수 없다. 칸이 모자란다.'};
+      pins.push(`S${n.s}${COLS[c]}${n.r}`);
+    }
+  } else {
+    if(n.r + def.pins - 1 > S.settings.rows) return {err:'아래로 행이 모자란다.'};
+    for(let i=0;i<def.pins;i++) pins.push(`S${n.s}${COLS[n.c]}${n.r+i}`);
+  }
+  return {pins};
+}
+function computePins(def, anchorId){
+  if(def.kind==='dip') return dipPins(def, anchorId, orient==='down'?'down':'up');
+  if(def.kind==='sip') return sipPins(def, anchorId, orient==='h'?'h':'v');
+  return {err:'2핀 소자는 두 구멍을 차례로 클릭한다.'};
+}
+
+/* ================= 입력 처리 ================= */
+function svgPoint(evt){
+  const r = svg.getBoundingClientRect();
+  return [(evt.clientX - r.left) / zoom, (evt.clientY - r.top) / zoom];
+}
+function nearest(x, y){
+  let best = null, bd = (0.62*P)**2;
+  for(const n of nodeList){
+    const rr = n.kind==='POST' ? (1.1*P)**2 : bd;
+    const d = (n.x-x)**2 + (n.y-y)**2;
+    if(d < rr && (!best || d < best.d)) best = {n, d};
+  }
+  return best ? best.n.id : null;
+}
+svg.addEventListener('mousemove', e => {
+  const [x,y] = svgPoint(e);
+  setHover(nearest(x,y));
+  drawGhost();
+});
+svg.addEventListener('mouseleave', () => { setHover(null); L.ghost.innerHTML=''; });
+svg.addEventListener('click', e => {
+  if(SIM){ simClick(e); return; }
+  const partEl = e.target.closest && e.target.closest('[data-part]');
+  const wireEl = e.target.closest && e.target.closest('[data-wire]');
+  if(tool==='select'){
+    if(partEl){ selection = {type:'part', id:partEl.dataset.part}; renderItems(); return; }
+    if(wireEl){ selection = {type:'wire', id:wireEl.dataset.wire}; renderItems(); return; }
+    if(hoverId){ selection = {type:'net', id:nets().netOfHole(hoverId), hole:hoverId}; refreshHighlights(); refreshInfo(); return; }
+    selection = null; renderItems(); return;
+  }
+  if(tool==='delete'){
+    if(partEl) removeItem('part', partEl.dataset.part);
+    else if(wireEl) removeItem('wire', wireEl.dataset.wire);
+    return;
+  }
+  if(!hoverId) return;
+  if(tool==='wire') return twoClick(hoverId, (a,b) => addWire(a,b), true);
+  if(tool==='part'){
+    const def = curPartId && partDef(curPartId);
+    if(!def){ flash('왼쪽 목록에서 부품을 먼저 골라라.'); return; }
+    if(def.kind==='two') return twoClick(hoverId, (a,b) => addPart(def, [a,b], null), false);
+    const r = computePins(def, hoverId);
+    if(r.err){ flash(r.err); return; }
+    const clash = r.pins.filter(occupied);
+    if(clash.length){ flash('이미 뭔가 꽂힌 구멍이 있다: ' + clash.map(holeName).join(', ')); return; }
+    addPart(def, r.pins, def.kind==='dip' ? (orient==='down'?'down':'up') : (orient==='h'?'h':'v'));
+  }
+});
+function twoClick(h, done, allowPost){
+  const n = nodes.get(h);
+  if(n.kind==='POST' && !allowPost){ flash('부품 다리는 포스트에 꽂을 수 없다. 선으로 연결해라.'); return; }
+  if(occupied(h)){ flash('이미 뭔가 꽂힌 구멍이다: ' + holeName(h)); return; }
+  if(!pending){ pending = h; refreshHighlights(); setHint(); return; }
+  if(pending===h){ pending = null; refreshHighlights(); setHint(); return; }
+  const a = pending; pending = null;
+  done(a, h); setHint();
+}
+function drawGhost(){
+  L.ghost.innerHTML = '';
+  if(!hoverId) return;
+  const [hx,hy] = pt(hoverId);
+  if((tool==='wire' || tool==='part') && pending){
+    const [ax,ay] = pt(pending);
+    el('line', {x1:ax, y1:ay, x2:hx, y2:hy, stroke: tool==='wire'?wireColor:'#888', 'stroke-width':0.4*P, 'stroke-linecap':'round'}, L.ghost);
+    return;
+  }
+  if(tool==='part' && curPartId){
+    const def = partDef(curPartId); if(!def || def.kind==='two') return;
+    const r = computePins(def, hoverId);
+    if(r.err){ el('circle', {cx:hx, cy:hy, r:0.7*P, fill:'none', stroke:'#e0005a', 'stroke-width':2}, L.ghost); return; }
+    const bad = r.pins.some(occupied);
+    r.pins.forEach((h,i) => { const [x,y] = pt(h); el('circle', {cx:x, cy:y, r: i===0?0.45*P:0.3*P, fill: bad?'#e0005a':(i===0?'#2f6fed':'#5aa0ff')}, L.ghost); });
+  }
+}
+let flashTimer = null;
+function flash(msg){ const h = $('#hint'); h.textContent = msg; h.style.background = 'rgba(201,52,52,.95)'; clearTimeout(flashTimer); flashTimer = setTimeout(setHint, 2600); }
+function setHint(){
+  const h = $('#hint'); h.style.background = '';
+  if(SIM){ h.textContent = '입력은 전원 공급기 포스트 전압으로 넣는다(왼쪽 패널 또는 포스트 클릭). 구멍을 클릭하면 값과 연결 관계가 나온다.'; return; }
+  const def = curPartId && partDef(curPartId);
+  const m = {
+    select: '구멍을 클릭하면 이어진 구멍이 전부 빛난다. 부품이나 선을 클릭하면 정보가 나온다.',
+    wire: pending ? `선 끝을 놓을 구멍을 클릭해라. (시작: ${holeName(pending)}) · Esc 취소` : '선의 시작 구멍을 클릭해라. 포스트도 된다.',
+    part: !def ? '왼쪽 목록에서 부품을 골라라.' :
+      def.kind==='two' ? (pending ? `${def.name}: 두 번째 다리 구멍을 클릭해라. (1번 핀: ${holeName(pending)})` : `${def.name}: 1번 핀(${def.pinNames[0]}) 구멍부터 클릭해라.`) :
+      def.kind==='dip' ? `${def.name}: 1번 핀 위치를 클릭해라. 노치 ${orient==='down'?'아래(1번 핀 F–J쪽)':'위(1번 핀 A–E쪽)'} · R로 뒤집기` :
+      `${def.name}: 1번 핀 위치를 클릭해라. 방향 ${orient==='h'?'가로':'세로'} · R로 전환`,
+    delete: '지울 부품이나 선을 클릭해라.'
+  };
+  h.textContent = m[tool];
+}
+function setTool(t){
+  tool = t; pending = null;
+  $$('.tool').forEach(x => x.classList.toggle('on', x.dataset.tool===t));
+  svg.parentElement.className = 'canvas mode-' + t;
+  document.getElementById('app').className = 'app mode-' + t;
+  refreshHighlights(); setHint(); L.ghost && (L.ghost.innerHTML='');
+}
+function setOrientOptions(){
+  const def = curPartId && partDef(curPartId);
+  const sel = $('#pOrient'); sel.innerHTML = '';
+  let opts = [['up','노치 위 (기본)']];
+  if(def && def.kind==='dip') opts = [['up','노치 위 (1번 핀 왼쪽 위)'],['down','노치 아래 (1번 핀 오른쪽 아래)']];
+  else if(def && def.kind==='sip') opts = [['v','세로 (같은 열, 행이 다름)'],['h','가로 (같은 행 — 핀끼리 단락 주의)']];
+  else if(def && def.kind==='two') opts = [['up','클릭한 두 구멍 사이']];
+  opts.forEach(([v,t]) => { const o = document.createElement('option'); o.value=v; o.textContent=t; sel.appendChild(o); });
+  if(!opts.some(o => o[0]===orient)) orient = opts[0][0];
+  sel.value = orient;
+}
+$('#pNames').addEventListener('change', e => { showPinNames = e.target.checked; renderItems(); });
+$('#pOrient').addEventListener('change', e => { orient = e.target.value; setHint(); drawGhost(); });
+document.addEventListener('keydown', e => {
+  if(e.target.matches('input,textarea,select')) return;
+  if(SIM){ if(e.key==='Escape'){ selection = null; renderItems(); } return; }
+  const k = e.key.toLowerCase();
+  if((e.ctrlKey||e.metaKey) && k==='z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if((e.ctrlKey||e.metaKey) && k==='y'){ e.preventDefault(); redo(); return; }
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  if(k==='v') setTool('select');
+  else if(k==='w') setTool('wire');
+  else if(k==='p') setTool('part');
+  else if(k==='d') setTool('delete');
+  else if(k==='n'){ showPinNames = !showPinNames; $('#pNames').checked = showPinNames; renderItems(); }
+  else if(k==='escape'){ pending = null; if(tool==='select'){ selection=null; renderItems(); } refreshHighlights(); setHint(); drawGhost(); }
+  else if(k==='r'){ const sel = $('#pOrient'); const i = (sel.selectedIndex + 1) % sel.options.length; sel.selectedIndex = i; orient = sel.value; setHint(); drawGhost(); }
+  else if((k==='delete'||k==='backspace') && selection && (selection.type==='part'||selection.type==='wire')) removeItem(selection.type, selection.id);
+});
+
+/* ================= 부품 목록 UI ================= */
+function renderPartList(){
+  if(SIM) return;
+  const q = $('#psearch').value.trim().toLowerCase();
+  const box = $('#plist'); box.innerHTML = '';
+  const cats = new Map();
+  allParts().forEach(p => {
+    const hay = (p.name + ' ' + (p.desc||'') + ' ' + p.id + ' ' + (p.cat||'')).toLowerCase();
+    if(q && !hay.includes(q)) return;
+    const c = p.cat || '내 부품';
+    if(!cats.has(c)) cats.set(c, []);
+    cats.get(c).push(p);
+  });
+  cats.forEach((list, c) => {
+    const h = document.createElement('div'); h.className = 'pcat'; h.textContent = c; box.appendChild(h);
+    list.forEach(p => {
+      const d = document.createElement('div'); d.className = 'pitem' + (p.id===curPartId?' on':'');
+      d.innerHTML = `<span>${esc(p.name)}</span><small>${esc(p.desc||'')}</small>`;
+      d.onclick = () => { curPartId = p.id; $('#pValue').value = p.value || ''; setOrientOptions(); setTool('part'); renderPartList(); };
+      box.appendChild(d);
+    });
+  });
+  if(!box.children.length) box.innerHTML = '<div class="muted" style="padding:10px">없다. 오른쪽 "부품 추가" 탭에서 만들어라.</div>';
+}
+$('#psearch').addEventListener('input', renderPartList);
+
+/* ================= 오른쪽 패널 ================= */
+function refreshInfo(){
+  if(SIM) return refreshSimInfo();
+  const box = $('#tab-info');
+  const N = nets();
+  if(!selection){
+    box.innerHTML = `<p class="muted" style="margin-top:0">선택 도구(V)로 구멍, 부품, 선을 클릭하면 여기 정보가 나온다.</p>
+      <h3>현황</h3><div>부품 ${S.parts.length}개 · 선 ${S.wires.length}개</div>
+      <h3>좌표 읽는 법</h3><div class="muted">S2-E17 = 2번 단자 스트립, E열, 17행. 한 행의 A–E 다섯 구멍은 서로 연결되고 F–J 다섯 구멍도 서로 연결된다. 가운데 홈을 건너면 끊긴다.</div>`;
+    return;
+  }
+  if(selection.type==='net'){
+    const root = selection.id;
+    const pinsIn = [];
+    S.parts.forEach(p => { const d = partDef(p.partId); p.pins.forEach((h,i) => { if(N.netOfHole(h)===root) pinsIn.push(`<tr><td>${esc(p.ref)}</td><td>${esc(d?d.name:'?')}</td><td>${i+1}번 ${esc(d&&d.pinNames?d.pinNames[i]:'')}</td><td>${esc(holeName(h))}</td></tr>`); }); });
+    const posts = S.settings.posts.map((po,i) => N.netOfHole(`POST${i}`)===root ? po.label : null).filter(Boolean);
+    const wires = S.wires.filter(w => N.netOfHole(w.a)===root).length;
+    box.innerHTML = `<h3>넷</h3><div style="font-size:16px;font-weight:700">${esc(netName(root))}</div>
+      <div class="muted">클릭한 구멍: ${esc(holeName(selection.hole))}</div>
+      <div style="margin-top:6px">연결된 부품 핀 ${pinsIn.length}개 · 선 ${wires}개${posts.length?' · 포스트 '+esc(posts.join(', ')):''}</div>
+      ${pinsIn.length?`<table class="pins" style="margin-top:8px"><tr><th>기호</th><th>부품</th><th>핀</th><th>위치</th></tr>${pinsIn.join('')}</table>`:'<p class="muted">이 넷에는 아직 부품 핀이 없다.</p>'}
+      <p class="muted">노랗게 빛나는 구멍이 전부 이 넷이다.</p>`;
+    return;
+  }
+  if(selection.type==='wire'){
+    const w = S.wires.find(x => x.id===selection.id); if(!w){ selection=null; return refreshInfo(); }
+    box.innerHTML = `<h3>선</h3><div>${esc(holeName(w.a))} → ${esc(holeName(w.b))}</div><div class="muted">넷: ${esc(netName(N.netOfHole(w.a)))}</div>
+      <h3>색 바꾸기</h3><div class="swatches" id="wsw"></div><div style="margin-top:10px"><button class="btn danger" id="wdel">이 선 삭제</button></div>`;
+    WIRE_COLORS.forEach(c => { const s = document.createElement('div'); s.className='sw'+(c===w.color?' on':''); s.style.background=c; s.onclick=()=>commit(()=>{ w.color=c; }); $('#wsw').appendChild(s); });
+    $('#wdel').onclick = () => removeItem('wire', w.id);
+    return;
+  }
+  if(selection.type==='part'){
+    const p = S.parts.find(x => x.id===selection.id); if(!p){ selection=null; return refreshInfo(); }
+    const d = partDef(p.partId) || {name:'?', pinNames:[]};
+    const rows = p.pins.map((h,i) => `<tr><td>${i+1}</td><td>${esc(d.pinNames&&d.pinNames[i]||'')}</td><td>${esc(holeName(h))}</td><td>${esc(netName(N.netOfHole(h)))}</td></tr>`).join('');
+    box.innerHTML = `<h3>부품</h3><div style="font-size:16px;font-weight:700">${esc(p.ref)} · ${esc(d.name)}</div><div class="muted">${esc(d.desc||'')}</div>
+      <div class="row" style="margin-top:8px"><label>기호</label><input type="text" id="eRef" value="${esc(p.ref)}"></div>
+      <div class="row"><label>값/메모</label><input type="text" id="eVal" value="${esc(p.value||'')}"></div>
+      <table class="pins" style="margin-top:8px"><tr><th>핀</th><th>이름</th><th>위치</th><th>넷</th></tr>${rows}</table>
+      ${d.vcc?`<p class="muted">전원 핀: VCC ${d.vcc}번 · GND ${d.gnd}번</p>`:''}
+      ${d.logicFn ? '<h3>동작 정의</h3><div class="muted">내장 규칙 (BCD→7세그, 7447 데이터시트 기준)</div>' : d.logic ? `<h3>동작 정의</h3><pre style="white-space:pre-wrap;background:#f6f7f9;border-radius:6px;padding:6px;font-size:11px;margin:0">${esc(d.logic)}</pre>` : (d.kind==='dip' && d.style!=='seg7' && d.style!=='dipsw' ? '<p class="muted">동작 정의 없음: 시뮬레이션에서 출력을 계산하지 않는다.</p>' : '')}
+      <div style="margin-top:10px"><button class="btn danger" id="pdel">이 부품 삭제</button></div>`;
+    $('#eRef').onchange = e => commit(() => { p.ref = e.target.value.trim() || p.ref; });
+    $('#eVal').onchange = e => commit(() => { p.value = e.target.value.trim(); });
+    $('#pdel').onclick = () => removeItem('part', p.id);
+  }
+}
+$$('.tab').forEach(t => t.onclick = () => {
+  $$('.tab').forEach(x => x.classList.toggle('on', x===t));
+  ['info','check','add','settings'].forEach(n => $('#tab-'+n).hidden = (n!==t.dataset.tab));
+  if(t.dataset.tab==='check') (SIM ? renderSimIssues(true) : runChecks(true));
+  if(t.dataset.tab==='settings') fillSettings();
+  if(t.dataset.tab==='add') renderMyParts();
+});
+
+/* ================= 점검 ================= */
+function runChecks(render){
+  const N = nets(); const issues = [];
+  const push = (lvl, msg, holes) => issues.push({lvl, msg, holes:holes||[]});
+  // 1. 구멍 중복
+  const cnt = new Map();
+  S.parts.forEach(p => p.pins.forEach(h => cnt.set(h, (cnt.get(h)||0)+1)));
+  S.wires.forEach(w => [w.a,w.b].forEach(h => { if(!h.startsWith('POST')) cnt.set(h, (cnt.get(h)||0)+1); }));
+  cnt.forEach((c,h) => { if(c>1) push('err', `한 구멍에 다리/선 ${c}개가 꽂혀 있다: ${holeName(h)}`, [h]); });
+  // 2. 전원 단락
+  const vccPosts = [], gndPosts = [];
+  S.settings.posts.forEach((po,i) => { if(po.role==='VCC') vccPosts.push(i); if(po.role==='GND') gndPosts.push(i); });
+  const vccNets = new Set(vccPosts.map(i => N.netOfHole(`POST${i}`)));
+  const gndNets = new Set(gndPosts.map(i => N.netOfHole(`POST${i}`)));
+  vccNets.forEach(r => { if(gndNets.has(r)) push('err', 'VCC와 GND가 같은 넷이다. 전원 단락! 전원 켜지 마라.', [`POST${vccPosts[0]}`]); });
+  const wiredPost = i => S.wires.some(w => w.a===`POST${i}` || w.b===`POST${i}`);
+  const vccWired = vccPosts.some(wiredPost), gndWired = gndPosts.some(wiredPost);
+  if(S.parts.some(p => { const d = partDef(p.partId); return d && d.vcc; })){
+    if(!vccWired) push('warn', 'VCC 역할 포스트에 연결된 선이 없다. 전원 공급 경로를 그어라.');
+    if(!gndWired) push('warn', 'GND 역할 포스트에 연결된 선이 없다.');
+  }
+  // + 레일과 − 레일이 한 넷
+  const railSigns = new Map();
+  nodeList.forEach(n => { if(n.kind==='V'||n.kind==='T'){ const r = N.netOfHole(n.id); const s = railSigns.get(r) || new Set(); s.add(n.sign); railSigns.set(r, s); } });
+  railSigns.forEach((s,r) => { if(s.size>1 && !(vccNets.has(r)&&gndNets.has(r))) push('warn', `+ 레일과 − 레일이 같은 넷(${netName(r)})으로 묶였다. 의도한 게 아니면 단락이다.`); });
+  // 3. IC 전원 핀
+  S.parts.forEach(p => {
+    const d = partDef(p.partId); if(!d || !d.vcc || !d.gnd) return;
+    const vr = N.netOfHole(p.pins[d.vcc-1]), gr = N.netOfHole(p.pins[d.gnd-1]);
+    if(vccWired ? !vccNets.has(vr) : !(railSigns.get(vr)||new Set()).has('+')) push('err', `${p.ref}(${d.name}) ${d.vcc}번 VCC 핀이 VCC에 연결되지 않았다.`, [p.pins[d.vcc-1]]);
+    if(gndWired ? !gndNets.has(gr) : !(railSigns.get(gr)||new Set()).has('-')) push('err', `${p.ref}(${d.name}) ${d.gnd}번 GND 핀이 GND에 연결되지 않았다.`, [p.pins[d.gnd-1]]);
+  });
+  // 4. 부품 핀 단락
+  S.parts.forEach(p => {
+    const d = partDef(p.partId); if(!d) return;
+    const seen = new Map();
+    p.pins.forEach((h,i) => { const r = N.netOfHole(h); if(seen.has(r)) push('warn', `${p.ref}(${d.name})의 ${seen.get(r)+1}번과 ${i+1}번 핀이 같은 넷이다. 부품이 단락된다.`, [p.pins[seen.get(r)], h]); else seen.set(r, i); });
+  });
+  // 5. 허공에 뜬 선 끝
+  const users = new Map();
+  const addU = (r, who) => { const s = users.get(r) || new Set(); s.add(who); users.set(r, s); };
+  S.parts.forEach(p => p.pins.forEach(h => addU(N.netOfHole(h), 'p'+p.id)));
+  S.wires.forEach(w => { addU(N.netOfHole(w.a), 'w'+w.id); });
+  S.settings.posts.forEach((po,i) => addU(N.netOfHole(`POST${i}`), 'post'+i));
+  S.wires.forEach(w => {
+    const ga = groupOf(nodes.get(w.a)), gb = groupOf(nodes.get(w.b));
+    if(ga===gb) push('info', `같은 줄(이미 연결된 곳)끼리 이은 선이다: ${holeName(w.a)} → ${holeName(w.b)}`, [w.a, w.b]);
+    const u = users.get(N.netOfHole(w.a));
+    if(u && u.size===1) push('warn', `이 선은 아무 부품에도 이어지지 않는다: ${holeName(w.a)} → ${holeName(w.b)}`, [w.a, w.b]);
+  });
+  const errs = issues.filter(i => i.lvl==='err').length;
+  const badge = $('#badge'); badge.hidden = !errs; badge.textContent = errs;
+  if(!render && $('#tab-check').hidden) return issues;
+  const box = $('#tab-check');
+  if(!issues.length){ box.innerHTML = `<div class="okbox"><b>점검 통과.</b> 규칙으로 잡히는 문제는 없다.</div><p class="muted">점검은 배선 실수만 잡는다. 논리가 맞는지는 네 회로도와 대조해라.</p>`; return issues; }
+  box.innerHTML = `<p class="muted" style="margin-top:0">항목을 클릭하면 해당 위치가 빛난다. <b style="color:var(--danger)">빨강</b>=전원 켜기 전 반드시 수정, <b style="color:var(--warn)">노랑</b>=확인 필요.</p>` +
+    issues.map((it,k) => `<div class="issue ${it.lvl==='err'?'err':it.lvl==='info'?'info':''}" data-k="${k}">${esc(it.msg)}</div>`).join('');
+  box.querySelectorAll('.issue').forEach(d => d.onclick = () => {
+    const it = issues[+d.dataset.k];
+    if(it.holes[0]){ selection = {type:'net', id:nets().netOfHole(it.holes[0]), hole:it.holes[0]}; refreshHighlights(); refreshInfo(); }
+  });
+  return issues;
+}
+
+/* ================= 설정 ================= */
+function fillSettings(){
+  const s = S.settings;
+  $('#sRows').value = s.rows; $('#sSplitV').checked = s.splitV; $('#sSplitT').checked = s.splitT; $('#sFlip').checked = s.flip;
+  const box = $('#postEdit'); box.innerHTML = '';
+  s.posts.forEach((po,i) => {
+    const d = document.createElement('div'); d.className = 'postrow';
+    d.innerHTML = `<input type="color" value="${po.color}" data-i="${i}" data-f="color"><input type="text" value="${esc(po.label)}" data-i="${i}" data-f="label"><select data-i="${i}" data-f="role"><option value="none">역할 없음</option><option value="VCC">VCC</option><option value="GND">GND</option><option value="IN">입력 (전압원)</option></select>`;
+    box.appendChild(d); d.querySelector('select').value = po.role;
+  });
+}
+$('#sApply').onclick = () => {
+  const s = S.settings;
+  const rows = Math.max(20, Math.min(80, parseInt($('#sRows').value,10) || 64));
+  const posts = s.posts.map((po,i) => ({
+    color: $(`#postEdit [data-i="${i}"][data-f="color"]`).value,
+    label: $(`#postEdit [data-i="${i}"][data-f="label"]`).value.trim() || po.label,
+    role: $(`#postEdit [data-i="${i}"][data-f="role"]`).value
+  }));
+  undoStack.push(snapshot());
+  Object.assign(s, {rows, splitV:$('#sSplitV').checked, splitT:$('#sSplitT').checked, flip:$('#sFlip').checked, posts});
+  selection = null; pending = null;
+  buildGeometry();
+  const bw = S.wires.length, bp = S.parts.length;
+  S.wires = S.wires.filter(w => nodes.has(w.a) && nodes.has(w.b));
+  S.parts = S.parts.filter(p => p.pins.every(h => nodes.has(h)));
+  const lost = (bw - S.wires.length) + (bp - S.parts.length);
+  drawBoard(); autosave(); fitZoom();
+  if(lost) flash(`보드 크기가 줄어 선/부품 ${lost}개가 빠졌다. 되돌리기(Ctrl+Z)로 복구할 수 있다.`);
+};
+
+/* ================= 사용자 부품 ================= */
+function syncAddForm(){
+  const k = $('#nKind').value;
+  $('#rowWidth').hidden = k!=='dip'; $('#rowPower').hidden = k!=='dip';
+  $('#rowStyle').hidden = k!=='two'; $('#rowColor').hidden = k!=='two';
+  $('#rowPins').hidden = k==='two';
+  $('#rowSim').hidden = k!=='sip';
+  if(k==='two' && ($('#nRef').value==='U')) $('#nRef').value = 'R';
+  if(k==='sip' && ($('#nRef').value==='U')) $('#nRef').value = 'J';
+}
+$('#nKind').onchange = syncAddForm;
+let editingId = null;
+$('#nCancel').onclick = () => { editingId = null; $('#nAdd').textContent = '부품 목록에 추가'; $('#nCancel').hidden = true; $('#nMsg').textContent = ''; };
+$('#nAdd').onclick = () => {
+  const kind = $('#nKind').value, name = $('#nName').value.trim();
+  const msg = t => { $('#nMsg').textContent = t; };
+  if(!name) return msg('이름을 적어라.');
+  let pins = kind==='two' ? 2 : parseInt($('#nPins').value,10);
+  if(!(pins>=1 && pins<=48)) return msg('핀 수가 이상하다.');
+  if(kind==='dip' && pins%2) return msg('DIP은 핀 수가 짝수여야 한다.');
+  let names = $('#nNames').value.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+  if(names.length && names.length!==pins) return msg(`핀 이름이 ${names.length}개다. 핀 수 ${pins}개와 맞춰라.`);
+  if(!names.length) names = Array.from({length:pins}, (_,i) => String(i+1));
+  const id = editingId || ('U:' + name + ':' + Date.now().toString(36));
+  const def = {id, name, desc:$('#nDesc').value.trim(), cat:'내 부품', kind, pins, pinNames:names, ref:($('#nRef').value.trim() || 'X')};
+  if(kind==='dip'){
+    def.width = parseInt($('#nWidth').value,10);
+    const v = parseInt($('#nVcc').value,10), g = parseInt($('#nGnd').value,10);
+    if(v>=1 && v<=pins) def.vcc = v; if(g>=1 && g<=pins) def.gnd = g;
+  }
+  if(kind==='two'){ def.style = $('#nStyle').value; if($('#nColor').value.trim()) def.color = $('#nColor').value.trim(); }
+  if(kind==='sip'){ def.style = 'header'; if($('#nSim').value==='spdt'){ if(pins!==3) return msg('SPDT 스위치는 3핀이다.'); def.style = 'switch'; def.sim = {type:'spdt'}; } }
+  if(kind==='two' && def.style==='button') def.sim = {type:'button'};
+  const lg = $('#nLogic').value.trim();
+  if(lg){ try{ compileLogicText(lg, names); }catch(err){ return msg('동작 정의 오류 — ' + err.message); } def.logic = lg; }
+  if(editingId){ userLib = userLib.map(x => x.id===editingId ? def : x); S.library = S.library.map(x => x.id===editingId ? def : x); }
+  else userLib.push(def);
+  saveUserLib();
+  msg(editingId ? `고쳤다: ${name}` : `추가했다: ${name}`);
+  if(editingId){ editingId = null; $('#nAdd').textContent = '부품 목록에 추가'; $('#nCancel').hidden = true; }
+  renderPartList(); renderMyParts(); renderItems(); autosave();
+};
+function renderMyParts(){
+  const box = $('#myParts');
+  if(!userLib.length){ box.innerHTML = '<div class="muted">아직 없다.</div>'; return; }
+  box.innerHTML = '';
+  userLib.forEach(p => {
+    const d = document.createElement('div'); d.className = 'row';
+    d.innerHTML = `<span style="flex:1">${esc(p.name)} <span class="muted">${esc(p.kind)} ${p.pins}핀${p.logic?' · 동작 있음':''}</span></span><button class="btn sm">고치기</button><button class="btn sm danger">빼기</button>`;
+    d.querySelectorAll('button')[0].onclick = () => {
+      editingId = p.id; $('#nKind').value = p.kind; syncAddForm();
+      $('#nName').value = p.name; $('#nDesc').value = p.desc||''; $('#nRef').value = p.ref||''; $('#nPins').value = p.pins;
+      $('#nWidth').value = String(p.width||3); $('#nVcc').value = p.vcc||''; $('#nGnd').value = p.gnd||'';
+      $('#nStyle').value = p.style && p.kind==='two' ? p.style : 'resistor'; $('#nColor').value = p.color||'';
+      $('#nSim').value = p.sim && p.sim.type==='spdt' ? 'spdt' : '';
+      $('#nNames').value = (p.pinNames||[]).join(', '); $('#nLogic').value = p.logic||'';
+      $('#nAdd').textContent = '수정 저장'; $('#nCancel').hidden = false; $('#nMsg').textContent = `${p.name} 고치는 중`;
+    };
+    d.querySelectorAll('button')[1].onclick = () => { userLib = userLib.filter(x => x.id!==p.id); saveUserLib(); renderMyParts(); renderPartList(); };
+    box.appendChild(d);
+  });
+}
+$('#libExport').onclick = () => download('잠실-부품목록.json', JSON.stringify({app:'jamsil-bb-lib', version:1, parts:userLib}, null, 2), 'application/json');
+$('#libImport').onclick = () => $('#libIn').click();
+$('#libIn').onchange = async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{
+    const o = JSON.parse(await f.text());
+    const list = Array.isArray(o) ? o : o.parts;
+    if(!Array.isArray(list)) throw new Error('형식');
+    let n = 0;
+    list.forEach(p => { if(p && p.id && p.kind && p.pins && !userLib.some(x => x.id===p.id)){ userLib.push(p); n++; } });
+    saveUserLib(); renderMyParts(); renderPartList(); $('#nMsg').textContent = `${n}개 가져왔다.`;
+  }catch(err){ $('#nMsg').textContent = '파일을 읽지 못했다.'; }
+  e.target.value = '';
+};
+
+/* ================= 파일 ================= */
+function download(name, content, type){
+  const blob = content instanceof Blob ? content : new Blob([content], {type});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function designJSON(){ return JSON.stringify({app:'jamsil-bb', version:1, appVersion:APP_VERSION, savedAt:new Date().toISOString(), meta:S.meta, settings:S.settings, library:S.library, wires:S.wires, parts:S.parts, nextId:S.nextId}, null, 1); }
+function fileBase(){ return (S.meta.title || '브레드보드').replace(/[\\/:*?"<>|]/g,'_'); }
+function autosave(){ if(SIM) return; trySet(STORE_AUTO, designJSON()); pushToSim(); }
+function loadDesign(o){
+  if(!o || o.app!=='jamsil-bb') throw new Error('잠실 브레드보드 파일이 아니다.');
+  S = {meta:o.meta||{title:''}, settings:Object.assign(defaultSettings(), o.settings||{}), library:o.library||[], wires:o.wires||[], parts:o.parts||[], nextId:o.nextId||1};
+  undoStack = []; redoStack = []; selection = null; pending = null;
+  $('#title').value = S.meta.title || '';
+  buildGeometry();
+  const bw = S.wires.length, bp = S.parts.length;
+  S.wires = S.wires.filter(w => nodes.has(w.a) && nodes.has(w.b));
+  S.parts = S.parts.filter(p => p.pins.every(h => nodes.has(h)));
+  const lost = (bw - S.wires.length) + (bp - S.parts.length);
+  drawBoard(); fitZoom(); renderPartList();
+  if(lost) setTimeout(() => flash(`보드 구조가 바뀌어 없는 구멍을 쓰던 선/부품 ${lost}개를 뺐다.`), 300);
+}
+$('#bSave').onclick = () => download(fileBase() + '.json', designJSON(), 'application/json');
+$('#bOpen').onclick = () => $('#fileIn').click();
+$('#fileIn').onchange = async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{ loadDesign(JSON.parse(await f.text())); autosave(); }catch(err){ flash('열지 못했다: ' + err.message); }
+  e.target.value = '';
+};
+$('#bNew').onclick = () => {
+  if((S.parts.length || S.wires.length) && !confirm('지금 설계를 비우고 새로 시작할까? (저장 안 한 내용은 사라진다)')) return;
+  const keep = S.settings;
+  loadDesign({app:'jamsil-bb', meta:{title:''}, settings:keep, library:[], wires:[], parts:[], nextId:1}); autosave();
+};
+$('#bUndo').onclick = undo; $('#bRedo').onclick = redo;
+$('#bSim').onclick = () => openSimWindow();
+$('#title').addEventListener('input', e => { S.meta.title = e.target.value; autosave(); });
+$('#title').addEventListener('change', () => drawBoard());
+$('#bPng').onclick = () => {
+  const saveSel = selection; selection = null; renderItems(); L.ghost.innerHTML = '';
+  const clone = svg.cloneNode(true);
+  clone.setAttribute('width', geom.W*2); clone.setAttribute('height', geom.H*2);
+  const data = new XMLSerializer().serializeToString(clone);
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas'); c.width = geom.W*2; c.height = geom.H*2;
+    const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+    c.toBlob(b => download(fileBase() + '.png', b), 'image/png');
+    selection = saveSel; renderItems();
+  };
+  img.onerror = () => { flash('그림 저장에 실패했다.'); selection = saveSel; renderItems(); };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(data);
+};
+
+/* ================= 확대 ================= */
+function fitZoom(mode){
+  const c = $('#canvas');
+  const zw = (c.clientWidth - 40)/geom.W, zh = (c.clientHeight - 72)/geom.H;
+  const z = mode==='all' ? Math.min(zw, zh) : Math.min(zw, 1.8);
+  zoom = Math.max(0.4, Math.min(3, z)); applyZoom();
+}
+$('#zIn').onclick = () => { zoom = Math.min(4, zoom*1.2); applyZoom(); };
+$('#zOut').onclick = () => { zoom = Math.max(0.3, zoom/1.2); applyZoom(); };
+$('#zFit').onclick = () => fitZoom(zoom < 0.95*Math.min(($('#canvas').clientWidth-40)/geom.W,1.8) ? 'width' : 'all');
+$('#canvas').addEventListener('wheel', e => { if(!e.ctrlKey) return; e.preventDefault(); zoom = Math.max(0.3, Math.min(4, zoom * (e.deltaY<0?1.1:1/1.1))); applyZoom(); }, {passive:false});
+
+/* ================= 기타 ================= */
+function updateCount(){ $('#stCount').textContent = `부품 ${S.parts.length} · 선 ${S.wires.length}`; }
+function renderSwatches(){
+  const box = $('#swatches'); box.innerHTML = '';
+  WIRE_COLORS.forEach(c => { const s = document.createElement('div'); s.className = 'sw' + (c===wireColor?' on':''); s.style.background = c; s.title = c;
+    s.onclick = () => { wireColor = c; renderSwatches(); if(tool!=='wire') setTool('wire'); }; box.appendChild(s); });
+}
+$$('.tool').forEach(t => t.onclick = () => setTool(t.dataset.tool));
+
+/* ================= 시뮬레이션 (1단계: 정지 상태 논리) ================= */
+const SIM = new URLSearchParams(location.search).get('mode') === 'sim';
+const STORE_SIM = 'jamsil-bb-simstate-v1';
+let simState = (() => { try{ const o = JSON.parse(tryGet(STORE_SIM) || 'null'); if(o && o.sw){ o.volts = o.volts || {}; if(o.vcc===undefined) o.vcc = 5; return o; } }catch(e){} return {sw:{}, family:'LS', volts:{}, vcc:5}; })();
+const THRESH = {LS:{vil:0.8, vih:2.0, vccMin:4.75, vccMax:5.25}, HC:{vil:1.5, vih:3.5, vccMin:2.0, vccMax:6.0}};
+function voltToLogic(v){ const t = THRESH[simState.family] || THRESH.LS; if(!(isFinite(v))) return 'X'; if(v <= t.vil) return 0; if(v >= t.vih) return 1; return 'X'; }
+function postVolt(i){ const v = simState.volts[i]; return typeof v === 'number' && isFinite(v) ? v : 0; }
+function saveSim(){ trySet(STORE_SIM, JSON.stringify(simState)); }
+let simRes = null;
+let simWin = null;
+
+/* --- 기본 부품 동작 정의 --- */
+const _q4 = f => [1,2,3,4].map(i => `${i}Y = ${f(i+'A', i+'B')}`).join('\n');
+const _sel3 = k => ['C','B','A'].map((n,j) => ((k >> (2-j)) & 1) ? n : '!' + n).join(' & ');
+const _add4 = (() => {
+  const L = ['let c1 = (A1 & B1) | (C0 & (A1 ^ B1))', 'Σ1 = A1 ^ B1 ^ C0'];
+  for(let i=2;i<=4;i++){
+    L.push(`Σ${i} = A${i} ^ B${i} ^ c${i-1}`);
+    L.splice(L.length-1, 0, `let c${i} = (A${i} & B${i}) | (c${i-1} & (A${i} ^ B${i}))`);
+  }
+  L.push('C4 = c4');
+  return L.join('\n');
+})();
+const LOGIC = {
+  '7400': _q4((a,b) => `!(${a} & ${b})`),
+  '7402': _q4((a,b) => `!(${a} | ${b})`),
+  '7408': _q4((a,b) => `${a} & ${b}`),
+  '7432': _q4((a,b) => `${a} | ${b}`),
+  '7486': _q4((a,b) => `${a} ^ ${b}`),
+  '7404': [1,2,3,4,5,6].map(i => `${i}Y = !${i}A`).join('\n'),
+  '7410': [1,2,3].map(i => `${i}Y = !(${i}A & ${i}B & ${i}C)`).join('\n'),
+  '7411': [1,2,3].map(i => `${i}Y = ${i}A & ${i}B & ${i}C`).join('\n'),
+  '7420': [1,2].map(i => `${i}Y = !(${i}A & ${i}B & ${i}C & ${i}D)`).join('\n'),
+  '74138': 'let en = G1 & !/G2A & !/G2B\n' + [0,1,2,3,4,5,6,7].map(k => `/Y${k} = !(en & ${_sel3(k)})`).join('\n'),
+  '74151': 'let m = C ? (B ? (A ? D7 : D6) : (A ? D5 : D4)) : (B ? (A ? D3 : D2) : (A ? D1 : D0))\nY = !/G & m\n/W = !(!/G & m)',
+  '74153': '1Y = !/1G & (B ? (A ? 1C3 : 1C2) : (A ? 1C1 : 1C0))\n2Y = !/2G & (B ? (A ? 2C3 : 2C2) : (A ? 2C1 : 2C0))',
+  '74157': [1,2,3,4].map(i => `${i}Y = !/G & (S ? ${i}B : ${i}A)`).join('\n'),
+  '74283': _add4,
+  '7474': '# 순차 소자: 1단계에서는 출력을 모름으로 둔다\n1Q = X\n/1Q = X\n2Q = X\n/2Q = X',
+  '74112': '# 순차 소자\n1Q = X\n/1Q = X\n2Q = X\n/2Q = X',
+  '74161': '# 순차 소자\nQA = X\nQB = X\nQC = X\nQD = X\nRCO = X',
+  '74163': '# 순차 소자\nQA = X\nQB = X\nQC = X\nQD = X\nRCO = X',
+  '74193': '# 순차 소자\nQA = X\nQB = X\nQC = X\nQD = X\n/CO = X\n/BO = X',
+  '74194': '# 순차 소자\nQA = X\nQB = X\nQC = X\nQD = X',
+  'NE555': '# 시간 소자\nOUT = X'
+};
+const SEG_PAT = ['abcdef','bc','abdeg','abcdg','bcfg','acdfg','cdefg','abc','abcdefg','abcfg','deg','cdg','bfg','adfg','defg',''];
+const LOGIC_FN = {
+  '7447': { inputs:['A','B','C','D','/LT','/BI','/RBI'], outputs:['a','b','c','d','e','f','g'], fn: v => {
+    const out = {}; const all = x => 'abcdefg'.split('').forEach(s => out[s] = x);
+    const bi = v('/BI'), lt = v('/LT');
+    if(bi==='X' || lt==='X'){ all('X'); return out; }
+    if(bi===0){ all(1); return out; }
+    if(lt===0){ all(0); return out; }
+    const d = ['A','B','C','D'].map(v);
+    if(d.includes('X')){ all('X'); return out; }
+    const n = d[0] + 2*d[1] + 4*d[2] + 8*d[3];
+    const rbi = v('/RBI');
+    if(n===0 && rbi===0){ all(1); return out; }
+    if(n===0 && rbi==='X'){ all('X'); return out; }
+    'abcdefg'.split('').forEach(s => out[s] = SEG_PAT[n].includes(s) ? 0 : 1);
+    return out;
+  }}
+};
+BUILTIN.forEach(b => { if(LOGIC[b.id]) b.logic = LOGIC[b.id]; if(LOGIC_FN[b.id]) b.logicFn = b.id; });
+BUILTIN.find(b => b.id==='SPDT').sim = {type:'spdt'};
+BUILTIN.find(b => b.id==='BTN').sim = {type:'button'};
+BUILTIN.push(
+  {id:'DIPSW-4', name:'DIP 스위치 4개', desc:'8핀 · 1↔8, 2↔7 …', cat:'입력', kind:'dip', pins:8, pinNames:['1','2','3','4','4\'','3\'','2\'','1\''], width:3, ref:'SW', style:'dipsw', sim:{type:'dipsw'}},
+  {id:'DIPSW-8', name:'DIP 스위치 8개', desc:'16핀 · 1↔16, 2↔15 …', cat:'입력', kind:'dip', pins:16, pinNames:['1','2','3','4','5','6','7','8','8\'','7\'','6\'','5\'','4\'','3\'','2\'','1\''], width:3, ref:'SW', style:'dipsw', sim:{type:'dipsw'}},
+  {id:'SEG7-CA', name:'7세그먼트 공통 애노드', desc:'0.6인치 10핀 · 7447용', cat:'출력', kind:'dip', pins:10, pinNames:['e','d','CA','c','DP','b','a','CA','f','g'], width:6, ref:'DS', style:'seg7', seg7:'CA'},
+  {id:'SEG7-CC', name:'7세그먼트 공통 캐소드', desc:'0.6인치 10핀', cat:'출력', kind:'dip', pins:10, pinNames:['e','d','CC','c','DP','b','a','CC','f','g'], width:6, ref:'DS', style:'seg7', seg7:'CC'}
+);
+
+/* --- 동작 정의 문법 해석기 --- */
+function compileLogicText(text, pinNames){
+  const nameIdx = new Map(); pinNames.forEach((n,i) => { if(!nameIdx.has(n)) nameIdx.set(n, i); });
+  const locals = new Map(); const lets = []; const outputs = []; const inputs = new Set();
+  const lines = String(text||'').split(/\n|;/).map(s => s.trim()).filter(s => s && !(s.startsWith('#') && !/^#\d/.test(s)) && !s.startsWith('//'));
+  const pinRef = tok => {
+    if(tok.pinNum!==undefined){ if(tok.pinNum<1 || tok.pinNum>pinNames.length) throw new Error(`#${tok.pinNum}번 핀은 없다`); return tok.pinNum-1; }
+    if(nameIdx.has(tok.id)) return nameIdx.get(tok.id);
+    return -1;
+  };
+  lines.forEach((line, ln) => {
+    try{
+      let isLet = false, body = line;
+      if(/^let\s/.test(line)){ isLet = true; body = line.slice(4).trim(); }
+      const eq = body.indexOf('=');
+      if(eq < 1) throw new Error('"이름 = 식" 형태가 아니다');
+      const lhs = body.slice(0, eq).trim(), rhs = body.slice(eq+1);
+      const toks = tokenizeLogic(rhs);
+      let pos = 0;
+      const peek = () => toks[pos], take = () => toks[pos++];
+      const expect = c => { if(take()!==c) throw new Error(`'${c}'가 필요하다`); };
+      const primary = () => {
+        const t = take();
+        if(t===undefined) throw new Error('식이 끝났다');
+        if(t==='('){ const e = ternary(); expect(')'); return e; }
+        if(typeof t === 'object'){
+          if(t.id==='0' || t.id==='1') return {k:'c', v:+t.id};
+          if(t.id==='X') return {k:'c', v:'X'};
+          if(t.id!==undefined && locals.has(t.id)) return {k:'l', n:t.id};
+          const i = pinRef(t);
+          if(i<0) throw new Error(`없는 핀 이름: ${t.id}`);
+          inputs.add(i); return {k:'p', i};
+        }
+        throw new Error(`예상 못한 기호 '${t}'`);
+      };
+      const unary = () => { if(peek()==='!' || peek()==='~'){ take(); return {k:'not', a:unary()}; } return primary(); };
+      const bin = (sub, op, k) => () => { let a = sub(); while(peek()===op){ take(); a = {k, a, b:sub()}; } return a; };
+      const and = bin(unary, '&', 'and'), xor = bin(and, '^', 'xor'), or = bin(xor, '|', 'or');
+      const ternary = () => { const c = or(); if(peek()==='?'){ take(); const a = ternary(); expect(':'); const b = ternary(); return {k:'if', c, a, b}; } return c; };
+      const ast = ternary();
+      if(pos < toks.length) throw new Error('식 끝에 남는 글자가 있다');
+      const deps = new Set(); const walk = a => { if(!a) return; if(a.k==='p') deps.add(a.i); else if(a.k==='l') (locals.get(a.n)||[]).forEach(x => deps.add(x)); else ['a','b','c'].forEach(k => a[k] && walk(a[k])); };
+      walk(ast);
+      if(isLet){ if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(lhs)) throw new Error('let 이름은 영문으로 쓴다'); locals.set(lhs, [...deps]); lets.push({n:lhs, ast}); }
+      else {
+        const t = lhs.startsWith('#') ? {pinNum:parseInt(lhs.slice(1),10)} : {id:lhs};
+        const i = pinRef(t); if(i<0) throw new Error(`없는 출력 핀: ${lhs}`);
+        outputs.push({i, ast, deps:[...deps]});
+      }
+    }catch(err){ throw new Error(`${ln+1}번째 줄: ${err.message}`); }
+  });
+  outputs.forEach(o => { inputs.delete(o.i); o.deps = o.deps.filter(i => !outputs.some(q => q.i===i)); });
+  return {lets, outputs, inputs:[...inputs]};
+}
+function tokenizeLogic(src){
+  const t = []; let i = 0;
+  while(i < src.length){
+    const c = src[i];
+    if(/\s/.test(c)){ i++; continue; }
+    if('()!~&|^?:'.includes(c)){ t.push(c); i++; continue; }
+    if(c==='#'){ let j = i+1; while(j<src.length && /\d/.test(src[j])) j++; t.push({pinNum:+src.slice(i+1, j)}); i = j; continue; }
+    const m = /^[A-Za-z0-9_\/Σ'가-힣]+/.exec(src.slice(i));
+    if(m){ t.push({id:m[0]}); i += m[0].length; continue; }
+    throw new Error(`알 수 없는 글자 '${c}'`);
+  }
+  return t;
+}
+function ev3(ast, get, loc){
+  switch(ast.k){
+    case 'c': return ast.v;
+    case 'p': return get(ast.i);
+    case 'l': return loc.get(ast.n);
+    case 'not': { const a = ev3(ast.a, get, loc); return a==='X' ? 'X' : 1-a; }
+    case 'and': { const a = ev3(ast.a, get, loc), b = ev3(ast.b, get, loc); if(a===0||b===0) return 0; if(a==='X'||b==='X') return 'X'; return 1; }
+    case 'or':  { const a = ev3(ast.a, get, loc), b = ev3(ast.b, get, loc); if(a===1||b===1) return 1; if(a==='X'||b==='X') return 'X'; return 0; }
+    case 'xor': { const a = ev3(ast.a, get, loc), b = ev3(ast.b, get, loc); if(a==='X'||b==='X') return 'X'; return a^b; }
+    case 'if':  { const c = ev3(ast.c, get, loc); if(c==='X'){ const a = ev3(ast.a, get, loc), b = ev3(ast.b, get, loc); return a===b ? a : 'X'; } return ev3(c ? ast.a : ast.b, get, loc); }
+  }
+  return 'X';
+}
+const _compCache = new Map();
+function compiled(def){
+  if(!def) return null;
+  if(def.logicFn && LOGIC_FN[def.logicFn]){
+    const F = LOGIC_FN[def.logicFn];
+    const idx = n => def.pinNames.indexOf(n);
+    return {fn:F.fn, idx, inputs:F.inputs.map(idx), outputs:F.outputs.map(n => ({i:idx(n), name:n, deps:F.inputs.map(idx)}))};
+  }
+  if(!def.logic || !String(def.logic).trim()) return null;
+  const key = def.id + '|' + def.pinNames.join(',') + '|' + def.logic;
+  if(_compCache.has(key)) return _compCache.get(key);
+  let c; try{ c = compileLogicText(def.logic, def.pinNames); }catch(err){ c = {err:err.message}; }
+  _compCache.set(key, c); return c;
+}
+function evalLogic(c, def, get){
+  if(c.fn){
+    const r = c.fn(n => get(c.idx(n)));
+    return c.outputs.map(o => ({i:o.i, v: r[o.name]===undefined ? 'X' : r[o.name]}));
+  }
+  const loc = new Map();
+  c.lets.forEach(l => loc.set(l.n, ev3(l.ast, get, loc)));
+  return c.outputs.map(o => ({i:o.i, v:ev3(o.ast, get, loc)}));
+}
+
+/* --- 스위치가 만드는 연결 (넷 계산에 합류) --- */
+function simSwitchUnions(uni){
+  if(!SIM) return;
+  S.parts.forEach(p => {
+    const d = partDef(p.partId); if(!d || !d.sim) return;
+    const g = h => { const n = nodes.get(h); return n ? groupOf(n) : null; };
+    const st = simState.sw[p.id];
+    if(d.sim.type==='spdt'){ const to = (st==='B') ? p.pins[2] : p.pins[0]; uni(g(p.pins[1]), g(to)); }
+    else if(d.sim.type==='button'){ if(st===true) uni(g(p.pins[0]), g(p.pins[1])); }
+    else if(d.sim.type==='dipsw'){
+      const half = p.pins.length/2, arr = Array.isArray(st) ? st : [];
+      for(let k=0;k<half;k++) if(arr[k]) uni(g(p.pins[k]), g(p.pins[p.pins.length-1-k]));
+    }
+  });
+}
+
+/* --- 계산 --- */
+function simulate(){
+  const N = nets();
+  const net = h => N.netOfHole(h);
+  const R = {val:new Map(), weak:new Set(), conf:new Map(), drv:new Map(), floating:[], unpowered:[], nologic:[], badlogic:[], seq:[], unstable:[], leds:new Map(), ledNoRes:[], segs:new Map(), reads:new Map(), noSupply:[], stateDep:[]};
+  const fixed = [];
+  R.inputs = []; R.overV = []; R.vccWarn = null;
+  const vcc = simState.vcc, T = THRESH[simState.family] || THRESH.LS;
+  if(S.settings.posts.some(po => po.role==='VCC') && (vcc < T.vccMin || vcc > T.vccMax)) R.vccWarn = `VCC ${vcc.toFixed(2)}V는 ${simState.family} 권장 범위(${T.vccMin}–${T.vccMax}V) 밖이다.`;
+  S.settings.posts.forEach((po,i) => {
+    if(po.role==='VCC') fixed.push({n:net('POST'+i), v: vcc >= 2 ? 1 : 'X', src:`포스트 ${po.label} (VCC ${vcc.toFixed(2)}V)`});
+    if(po.role==='GND') fixed.push({n:net('POST'+i), v:0, src:`포스트 ${po.label} (GND 0V)`});
+    if(po.role==='IN'){
+      const v = postVolt(i), lv = voltToLogic(v);
+      fixed.push({n:net('POST'+i), v:lv, src:`포스트 ${po.label} (입력 ${v.toFixed(2)}V)`});
+      R.inputs.push({i, v, lv});
+      if(v > vcc + 0.5 || v < -0.5) R.overV.push({i, v});
+    }
+  });
+  if(!fixed.some(f => f.v===1)) R.noSupply.push('VCC 역할 포스트가 없다');
+  const resistors = [], logicParts = [];
+  S.parts.forEach(p => {
+    const d = partDef(p.partId); if(!d) return;
+    if(d.kind==='two' && d.style==='resistor'){ resistors.push([net(p.pins[0]), net(p.pins[1])]); return; }
+    const c = compiled(d);
+    if(c && c.err){ R.badlogic.push({p, d, err:c.err}); return; }
+    if(c){ logicParts.push({p, d, c}); if(/^#\s*(순차|시간)/m.test(d.logic||'')) R.seq.push(p); return; }
+    if(d.kind==='dip' && d.style!=='seg7' && d.style!=='dipsw') R.nologic.push(p);
+  });
+  let outs = new Map(logicParts.map(lp => [lp.p.id, lp.c.outputs.map(o => ({i:o.i, v:'X'}))]));
+  const resolve = () => {
+    const drv = new Map(); const add = (n,v,src,supply) => { if(!drv.has(n)) drv.set(n, []); drv.get(n).push({v, src, supply:!!supply}); };
+    fixed.forEach(f => add(f.n, f.v, f.src, true));
+    logicParts.forEach(lp => outs.get(lp.p.id).forEach(o => { if(o.i>=0) add(net(lp.p.pins[o.i]), o.v, `${lp.p.ref} ${lp.d.name} ${o.i+1}번 ${lp.d.pinNames[o.i]} (출력)`); }));
+    const val = new Map(), conf = new Map(), weak = new Set();
+    drv.forEach((list, n) => {
+      const vs = new Set(list.map(x => x.v));
+      if(vs.has(0) && vs.has(1)) conf.set(n, list);            // 0과 1이 맞붙음 = 충돌
+      const sup = new Set(list.filter(x => x.supply).map(x => x.v));
+      if(sup.size===1) val.set(n, [...sup][0]);                 // 전원 포스트가 모는 넷은 전원 값 유지 (충돌은 따로 보고)
+      else if(vs.size===1) val.set(n, list[0].v);
+      else val.set(n, 'X');
+    });
+    const strong = new Map(val);
+    resistors.forEach(([a,b]) => [[a,b],[b,a]].forEach(([x,y]) => {
+      if(strong.has(x) || !strong.has(y)) return;
+      const v = strong.get(y), cur = val.get(x);
+      if(cur===undefined){ val.set(x, v); weak.add(x); } else if(cur!==v) val.set(x, 'X');
+    }));
+    return {val, conf, weak, drv};
+  };
+  const family = simState.family;
+  const computePart = ({p, d, c}, st) => {
+    const pv = i => { const v = st.val.get(net(p.pins[i])); return v===undefined ? 'Z' : v; };
+    const powered = !(d.vcc && d.gnd) || (pv(d.vcc-1)===1 && pv(d.gnd-1)===0);
+    if(!powered) return c.outputs.map(o => ({i:o.i, v:'X'}));
+    const get = i => { const v = pv(i); return v==='Z' ? (family==='LS' ? 1 : 'X') : v; };
+    return evalLogic(c, d, get);
+  };
+  // 출력 하나씩 차례로 갱신한다(동시 갱신이 만드는 가짜 발진을 막는다)
+  const sweep = changedParts => {
+    let st = resolve(), changed = false;
+    for(const lp of logicParts){
+      const cur = outs.get(lp.p.id);
+      for(let k=0;k<cur.length;k++){
+        const v = computePart(lp, st)[k].v;
+        if(v!==cur[k].v){ cur[k].v = v; changed = true; if(changedParts) changedParts.add(lp.p.id); st = resolve(); }
+      }
+    }
+    return changed;
+  };
+  const runFrom = init => {
+    outs = new Map(logicParts.map(lp => [lp.p.id, lp.c.outputs.map(o => ({i:o.i, v:init}))]));
+    let it = 0;
+    while(it < 100){ it++; if(!sweep()) return {st:resolve(), it, stable:true, outs}; }
+    return {st:resolve(), it, stable:false, outs};
+  };
+  // 1) 모든 출력을 0에서 출발시켜 발진(끝없이 뒤집힘)을 찾는다
+  const probe = runFrom(0);
+  const toggling = new Set();
+  if(!probe.stable){ sweep(toggling); sweep(toggling); }
+  // 2) 본 계산: 모름(X)에서 출발. 입력만으로 정해지는 값만 확정된다
+  const main = runFrom('X');
+  outs = main.outs; const st = main.st;
+  R.unstable = logicParts.filter(lp => toggling.has(lp.p.id)).map(lp => lp.p);
+  if(probe.stable) logicParts.forEach(lp => { const a = main.outs.get(lp.p.id), b = probe.outs.get(lp.p.id); if(a.some((o,k) => o.v==='X' && b[k].v!=='X')) R.stateDep.push(lp.p); });
+  R.val = st.val; R.weak = st.weak; R.conf = st.conf; R.drv = st.drv; R.iter = main.it; R.stable = probe.stable && main.stable;
+  // 읽는 쪽, 전원, 떠 있는 입력 (실제로 쓰이는 출력에 관여하는 입력만 경고)
+  const conn = new Map(); const bump = n => conn.set(n, (conn.get(n)||0) + 1);
+  S.parts.forEach(p => p.pins.forEach(h => bump(net(h))));
+  S.wires.forEach(w => { bump(net(w.a)); bump(net(w.b)); });
+  S.settings.posts.forEach((po,i) => bump(net('POST'+i)));
+  logicParts.forEach(({p, d, c}) => {
+    const relevant = new Set();
+    c.outputs.forEach(o => { if(o.i>=0 && (conn.get(net(p.pins[o.i]))||0) > 1) (o.deps||[]).forEach(i => relevant.add(i)); });
+    const pv = i => st.val.get(net(p.pins[i]));
+    if(d.vcc && d.gnd && !(pv(d.vcc-1)===1 && pv(d.gnd-1)===0)) R.unpowered.push({p, d, vcc:pv(d.vcc-1), gnd:pv(d.gnd-1)});
+    c.inputs.forEach(i => {
+      if(i<0) return;
+      const n = net(p.pins[i]);
+      if(!R.reads.has(n)) R.reads.set(n, []);
+      R.reads.get(n).push(`${p.ref} ${d.name} ${i+1}번 ${d.pinNames[i]} (입력)`);
+      if(st.val.get(n)===undefined && relevant.has(i)) R.floating.push({p, d, i});
+    });
+  });
+  // LED, 7세그
+  S.parts.forEach(p => {
+    const d = partDef(p.partId); if(!d) return;
+    if(d.kind==='two' && d.style==='led'){
+      const na = net(p.pins[0]), nk = net(p.pins[1]);
+      const a = st.val.get(na), k = st.val.get(nk);
+      const on = a===1 && k===0;
+      R.leds.set(p.id, on ? 'on' : (a==='X' || k==='X') ? 'x' : 'off');
+      if(on && !st.weak.has(na) && !st.weak.has(nk)) R.ledNoRes.push(p);
+    }
+    if(d.style==='seg7'){
+      const com = d.pinNames.findIndex(n => n==='CA' || n==='CC');
+      const cv = st.val.get(net(p.pins[com]));
+      const lit = {};
+      ['a','b','c','d','e','f','g','DP'].forEach(s => {
+        const i = d.pinNames.indexOf(s); if(i<0) return;
+        const v = st.val.get(net(p.pins[i]));
+        lit[s] = d.seg7==='CC' ? (cv===0 && v===1) : (cv===1 && v===0);
+        if(lit[s]===false && (v==='X' || cv==='X')) lit[s] = 'x';
+      });
+      R.segs.set(p.id, lit);
+    }
+  });
+  simRes = R;
+  return R;
+}
+function simValOfHole(h){
+  if(!simRes) return undefined;
+  return simRes.val.get(nets().netOfHole(h));
+}
+function simCls(n){
+  if(!SIM || !simRes) return '';
+  const r = nets().netOfHole(n.id), v = simRes.val.get(r);
+  if(v===undefined) return '';
+  if(v==='X') return ' vx';
+  return (simRes.weak.has(r) ? ' w' : ' v') + v;
+}
+function valText(v, weak){
+  if(v===undefined) return '떠 있음(Z)';
+  if(v==='X') return '모름/충돌(X)';
+  return String(v) + (weak ? ' (저항 경유, 약함)' : '');
+}
+
+/* --- 부품 위 장식 (7세그 글자, DIP 스위치, 시뮬레이션 상태) --- */
+function drawPart(p){
+  drawPartBase(p);
+  const d = partDef(p.partId); if(!d) return;
+  const g = L.parts.lastChild;
+  const P2 = p.pins.map(pt);
+  const xs = P2.map(q => q[0]), ys = P2.map(q => q[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs))/2, cy = (Math.min(...ys) + Math.max(...ys))/2;
+  if(d.style==='seg7'){
+    const lit = (SIM && simRes && simRes.segs.get(p.id)) || {};
+    const w = 22, h = 40, x0 = cx - w/2, y0 = cy - h/2, t = 4;
+    el('rect', {x:x0 - 7, y:y0 - 6, width:w + 14, height:h + 12, rx:3, fill:'#0d0d0d'}, g);
+    const segs = {a:[x0+2,y0,w-4,t], d:[x0+2,y0+h-t,w-4,t], g:[x0+2,y0+h/2-t/2,w-4,t], f:[x0,y0+2,t,h/2-3], b:[x0+w-t,y0+2,t,h/2-3], e:[x0,y0+h/2+1,t,h/2-3], c:[x0+w-t,y0+h/2+1,t,h/2-3]};
+    Object.entries(segs).forEach(([s,[x,y,ww,hh]]) => el('rect', {x, y, width:ww, height:hh, rx:1.5, fill: lit[s]===true ? '#ff3b30' : lit[s]==='x' ? '#6a3d8a' : '#2b2b2b'}, g));
+    el('circle', {cx:x0 + w + 3, cy:y0 + h - 1, r:2, fill: lit.DP===true ? '#ff3b30' : '#2b2b2b'}, g);
+    if(Object.values(lit).some(v => v===true)) el('rect', {x:x0 - 7, y:y0 - 6, width:w + 14, height:h + 12, rx:3, fill:'#ff3b30', opacity:.08}, g);
+  }
+  if(d.style==='dipsw'){
+    const half = p.pins.length/2;
+    const arr = Array.isArray(simState.sw[p.id]) ? simState.sw[p.id] : [];
+    const xl = Math.min(...xs), xr = Math.max(...xs);
+    el('rect', {x:xl + 0.38*P, y:Math.min(...ys) - 0.5*P, width:xr - xl - 0.76*P, height:Math.max(...ys) - Math.min(...ys) + P, rx:2, fill:'#c62828', stroke:'#7a1111'}, g);
+    for(let k=0;k<half;k++){
+      const y = P2[k][1], on = SIM && arr[k];
+      const bx = xl + 0.75*P, bw = xr - xl - 1.5*P;
+      el('rect', {x:bx, y:y - 0.3*P, width:bw, height:0.6*P, rx:1, fill:'#f4f4f4'}, g);
+      el('rect', {x: on ? bx + bw*0.55 : bx, y:y - 0.3*P, width:bw*0.45, height:0.6*P, rx:1, fill: on ? '#1f9d55' : '#555'}, g);
+      el('text', {x:cx, y:y + 2.2, 'font-size':5.5, fill: '#111', 'text-anchor':'middle', 'pointer-events':'none'}, g, String(k+1));
+    }
+    el('text', {x:cx, y:Math.min(...ys) - 0.65*P, 'font-size':7, fill:'#fff', stroke:'#000', 'stroke-width':2, 'paint-order':'stroke', 'text-anchor':'middle'}, g, `${p.ref} ${SIM ? '(클릭: ON/OFF)' : ''}`);
+  }
+  if(!SIM || !simRes) return;
+  if(d.kind==='two' && d.style==='led'){
+    const s = simRes.leds.get(p.id);
+    const [x1,y1] = P2[0], [x2,y2] = P2[1], mx = (x1+x2)/2, my = (y1+y2)/2;
+    if(s==='on'){
+      el('circle', {cx:mx, cy:my, r:1.6*P, fill:d.color||'#e33', opacity:.28}, g);
+      el('circle', {cx:mx, cy:my, r:0.8*P, fill:d.color||'#e33', stroke:'#fff', 'stroke-width':1.5}, g);
+    } else {
+      el('circle', {cx:mx, cy:my, r:0.8*P, fill:'#000', opacity:.55}, g);
+      if(s==='x') el('text', {x:mx, y:my + 3, 'font-size':8, fill:'#e0b0ff', 'text-anchor':'middle'}, g, '?');
+    }
+  }
+  if(d.sim && d.sim.type==='spdt'){
+    const st = simState.sw[p.id]==='B' ? 'B' : 'A';
+    const [ax,ay] = P2[0], [bx,by] = P2[2], [cx2,cy2] = P2[1];
+    const tx = st==='A' ? (ax+cx2)/2 : (bx+cx2)/2, ty = st==='A' ? (ay+cy2)/2 : (by+cy2)/2;
+    el('rect', {x:tx - 0.45*P, y:ty - 0.45*P, width:0.9*P, height:0.9*P, rx:2, fill:'#ffd400', stroke:'#000'}, g);
+    el('text', {x:Math.max(...xs) + 0.7*P, y:cy + 12, 'font-size':8, fill:'#ffd400', stroke:'#000', 'stroke-width':2, 'paint-order':'stroke'}, g, `COM→${st}`);
+  }
+  if(d.sim && d.sim.type==='button'){
+    const on = simState.sw[p.id]===true;
+    el('text', {x:cx, y:cy + 1.6*P, 'font-size':8, fill: on ? '#7CFC7C' : '#ddd', stroke:'#000', 'stroke-width':2, 'paint-order':'stroke', 'text-anchor':'middle'}, g, on ? '눌림' : '뗌');
+  }
+}
+
+/* --- 시뮬레이션 창 입력 --- */
+function simToggle(p, evt){
+  const d = partDef(p.partId); if(!d || !d.sim) return false;
+  if(d.sim.type==='spdt') simState.sw[p.id] = simState.sw[p.id]==='B' ? 'A' : 'B';
+  else if(d.sim.type==='button') simState.sw[p.id] = !(simState.sw[p.id]===true);
+  else if(d.sim.type==='dipsw'){
+    const half = p.pins.length/2;
+    const arr = Array.isArray(simState.sw[p.id]) ? simState.sw[p.id].slice() : new Array(half).fill(false);
+    let k = 0;
+    if(evt){ const [, y] = svgPoint(evt); let bd = 1e9; for(let i=0;i<half;i++){ const dy = Math.abs(pt(p.pins[i])[1] - y); if(dy < bd){ bd = dy; k = i; } } }
+    arr[k] = !arr[k]; simState.sw[p.id] = arr;
+  }
+  trySet(STORE_SIM, JSON.stringify(simState));
+  return true;
+}
+function simClick(e){
+  const partEl = e.target.closest && e.target.closest('[data-part]');
+  if(partEl){
+    const p = S.parts.find(x => x.id===partEl.dataset.part);
+    if(p && simToggle(p, e)){ renderItems(); renderSimPanel(); return; }
+    selection = {type:'part', id:partEl.dataset.part}; renderItems(); return;
+  }
+  if(hoverId && hoverId.startsWith('POST')){
+    const i = +hoverId.slice(4);
+    if(S.settings.posts[i] && S.settings.posts[i].role==='IN'){ simState.volts[i] = postVolt(i) >= (THRESH[simState.family]||THRESH.LS).vih ? 0 : simState.vcc; saveSim(); renderItems(); return; }
+  }
+  if(hoverId){ selection = {type:'net', id:nets().netOfHole(hoverId), hole:hoverId}; refreshHighlights(); refreshInfo(); return; }
+  selection = null; renderItems();
+}
+function drawPostOverlays(){
+  if(!SIM) return;
+  S.settings.posts.forEach((po,i) => {
+    const n = nodes.get('POST'+i); if(!n) return;
+    let t = null, col = '#fff';
+    if(po.role==='IN'){ const v = postVolt(i), lv = voltToLogic(v); t = `${v.toFixed(1)}V→${lv}`; col = lv===1 ? '#ff8a8d' : lv===0 ? '#8fb3ff' : '#d7a6ff'; }
+    else if(po.role==='VCC') t = `${simState.vcc.toFixed(1)}V`;
+    else if(po.role==='GND') t = '0V';
+    if(!t) return;
+    el('rect', {x:n.x - 22, y:n.y - P*2.35, width:44, height:13, rx:3, fill:'#111', stroke:col, 'stroke-width':1}, L.over);
+    el('text', {x:n.x, y:n.y - P*2.35 + 9.5, 'font-size':9, fill:col, 'text-anchor':'middle', 'font-weight':700}, L.over, t);
+  });
+}
+
+/* --- 시뮬레이션 창 화면 --- */
+function refreshSimInfo(){
+  const box = $('#tab-info');
+  if(!simRes){ box.innerHTML = '<p class="muted">설계를 기다리는 중이다.</p>'; return; }
+  if(selection && selection.type==='net'){
+    const r = selection.id, v = simRes.val.get(r);
+    const drv = (simRes.drv.get(r) || []).map(x => `<li>${esc(x.src)} → <b>${x.v}</b></li>`).join('');
+    const rd = (simRes.reads.get(r) || []).map(x => `<li>${esc(x)}</li>`).join('');
+    box.innerHTML = `<h3>넷 ${esc(netName(r))}</h3><div style="font-size:22px;font-weight:800">${esc(valText(v, simRes.weak.has(r)))}</div>
+      <div class="muted">클릭한 구멍: ${esc(holeName(selection.hole))}</div>
+      <h3>이 넷을 모는 쪽</h3>${drv ? `<ul style="margin:0;padding-left:18px">${drv}</ul>` : `<div class="muted">${simRes.weak.has(r) ? '직접 모는 출력은 없다. 저항을 거쳐 값이 들어온다.' : '없다.'}</div>`}
+      <h3>이 넷을 읽는 쪽</h3>${rd ? `<ul style="margin:0;padding-left:18px">${rd}</ul>` : '<div class="muted">없다.</div>'}`;
+    return;
+  }
+  if(selection && selection.type==='part'){
+    const p = S.parts.find(x => x.id===selection.id); if(!p){ selection = null; return refreshSimInfo(); }
+    const d = partDef(p.partId) || {name:'?', pinNames:[]};
+    const rows = p.pins.map((h,i) => { const r = nets().netOfHole(h), v = simRes.val.get(r); return `<tr><td>${i+1}</td><td>${esc(d.pinNames[i]||'')}</td><td><b>${v===undefined?'Z':v}</b></td><td>${esc(holeName(h))}</td></tr>`; }).join('');
+    box.innerHTML = `<h3>부품</h3><div style="font-size:16px;font-weight:700">${esc(p.ref)} · ${esc(d.name)}</div>
+      <table class="pins" style="margin-top:8px"><tr><th>핀</th><th>이름</th><th>값</th><th>위치</th></tr>${rows}</table>`;
+    return;
+  }
+  const errs = simIssues().filter(i => i.lvl==='err').length;
+  box.innerHTML = `<h3>상태</h3><div style="font-size:18px;font-weight:800;color:${errs?'var(--danger)':'var(--ok)'}">${errs ? `오류 ${errs}건` : (simRes.stable ? '안정' : '불안정')}</div>
+    <p class="muted">구멍을 클릭하면 그 넷의 값, 모는 쪽, 읽는 쪽이 나온다. 스위치는 보드 위에서 직접 클릭해도 된다.</p>
+    <h3>색 범례</h3>
+    <div style="line-height:2">
+      <span class="lg" style="background:#e5484d"></span> 1 &nbsp; <span class="lg" style="background:#3b6fe0"></span> 0 &nbsp;
+      <span class="lg" style="background:#f2a0a2"></span> 약한 1 &nbsp; <span class="lg" style="background:#9fb8ef"></span> 약한 0<br>
+      <span class="lg" style="background:#a24be0"></span> 모름/충돌 &nbsp; <span class="lg" style="background:#43413c"></span> 떠 있음·연결 없음
+    </div>`;
+}
+function simIssues(){
+  if(!simRes) return [];
+  const I = [], R = simRes;
+  const push = (lvl, msg, hole) => I.push({lvl, msg, holes: hole ? [hole] : []});
+  R.noSupply.forEach(m => push('err', m + '. 보드 설정에서 포스트 역할을 VCC/GND로 정해라.'));
+  R.overV.forEach(o => push('err', `포스트 ${S.settings.posts[o.i].label} 입력 ${o.v.toFixed(2)}V가 전원 범위(−0.5V ~ VCC+0.5V)를 넘는다. 실물에서는 칩이 상할 수 있다.`, 'POST'+o.i));
+  if(R.vccWarn) push('warn', R.vccWarn);
+  R.inputs.filter(x => x.lv==='X').forEach(x => { const T = THRESH[simState.family] || THRESH.LS; push('warn', `포스트 ${S.settings.posts[x.i].label} 입력 ${x.v.toFixed(2)}V는 ${simState.family} 기준 0(≤${T.vil}V)도 1(≥${T.vih}V)도 아닌 불확정 구간이다. X로 계산했다.`, 'POST'+x.i); });
+  R.conf.forEach((list, n) => { const h = nodeList.find(x => nets().netOfHole(x.id)===n); push('err', `출력 충돌: 한 넷을 0과 1로 동시에 몬다 — ${list.map(x => `${x.src}=${x.v}`).join(', ')}. 실물에서는 단락 전류가 흐른다.`, h ? h.id : null); });
+  R.unpowered.forEach(u => push('err', `${u.p.ref}(${u.d.name}) 전원이 없다. VCC ${u.d.vcc}번=${u.vcc===undefined?'Z':u.vcc}, GND ${u.d.gnd}번=${u.gnd===undefined?'Z':u.gnd}. 출력은 모름(X)으로 둔다.`, u.p.pins[u.d.vcc-1]));
+  R.ledNoRes.forEach(p => push('err', `${p.ref}: 직렬 저항 없이 켜진다. 실물에서는 과전류로 LED나 IC가 상할 수 있다.`, p.pins[0]));
+  R.unstable.forEach(p => { const d = partDef(p.partId); push('warn', `${p.ref}(${d?d.name:''}) 출력이 끝없이 뒤집힌다(발진 루프). 정지 상태 시뮬레이션으로는 값을 정할 수 없어 X로 둔다.`, p.pins[0]); });
+  R.stateDep.forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''}) 피드백 때문에 출력이 이전 상태에 따라 달라진다(래치 유지 상태). 1단계에서는 모름(X)으로 둔다. 입력으로 세트/리셋하면 값이 정해진다.`, p.pins[0]); });
+  R.badlogic.forEach(b => push('warn', `${b.p.ref}(${b.d.name}) 동작 정의 오류: ${b.err}`, b.p.pins[0]));
+  R.floating.forEach(f => push('warn', `${f.p.ref}(${f.d.name}) ${f.i+1}번 ${f.d.pinNames[f.i]} 입력이 떠 있다. ${simState.family==='LS' ? 'LS 기준 1로 계산했다. 실물에서는 불안정할 수 있다.' : 'HC 기준 값을 모른다(X).'}`, f.p.pins[f.i]));
+  R.seq.forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''})는 시간에 따라 변하는 소자라 1단계에서 출력을 모름(X)으로 둔다.`, p.pins[0]); });
+  R.nologic.forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''})는 동작 정의가 없어 출력을 계산하지 않는다.`, p.pins[0]); });
+  return I;
+}
+function renderSimIssues(render){
+  const issues = simIssues();
+  const errs = issues.filter(i => i.lvl==='err').length;
+  const badge = $('#badge'); badge.hidden = !errs; badge.textContent = errs;
+  if(!render && $('#tab-check').hidden) return issues;
+  const box = $('#tab-check');
+  if(!issues.length){ box.innerHTML = `<div class="okbox"><b>경고 없음.</b> 회로가 안정 상태로 계산됐다.</div><p class="muted">시뮬레이션은 정지 상태 논리만 본다. 접촉 불량, 칩 불량, 지연 시간은 반영하지 않는다.</p>`; return issues; }
+  box.innerHTML = `<p class="muted" style="margin-top:0">항목을 클릭하면 위치가 빛난다.</p>` +
+    issues.map((it,k) => `<div class="issue ${it.lvl==='err'?'err':it.lvl==='info'?'info':''}" data-k="${k}">${esc(it.msg)}</div>`).join('');
+  box.querySelectorAll('.issue').forEach(dv => dv.onclick = () => {
+    const it = issues[+dv.dataset.k];
+    if(it.holes[0]){ selection = {type:'net', id:nets().netOfHole(it.holes[0]), hole:it.holes[0]}; refreshHighlights(); refreshInfo(); }
+  });
+  return issues;
+}
+function renderSimPanel(){
+  if(!SIM) return;
+  const pbox = $('#simPsu');
+  if(pbox){
+    const T = THRESH[simState.family] || THRESH.LS;
+    pbox.innerHTML = S.settings.posts.map((po,i) => {
+      const dot = `<span class="lg" style="background:${esc(po.color)}"></span>`;
+      if(po.role==='VCC') return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">VCC</span></span><input type="number" step="0.05" min="0" max="7" value="${simState.vcc}" data-vcc style="width:70px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"> V</div>`;
+      if(po.role==='GND') return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">GND · 0V 기준</span></span></div>`;
+      if(po.role==='IN'){ const v = postVolt(i), lv = voltToLogic(v);
+        return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">입력</span> <b style="color:${lv===1?'#d22f2f':lv===0?'#2f6fed':'#a24be0'}">→ ${lv}</b></span><input type="number" step="0.1" min="-1" max="12" value="${v}" data-pv="${i}" style="width:62px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"> V</div>
+          <div class="row" style="margin-left:18px"><button class="btn sm" data-pset="${i}" data-v="0">0V</button><button class="btn sm" data-pset="${i}" data-v="vcc">${simState.vcc.toFixed(1)}V</button><span class="muted" style="font-size:11px">0 ≤ ${T.vil}V · 1 ≥ ${T.vih}V</span></div>`; }
+      return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">역할 없음 (편집기 보드 설정에서 정한다)</span></span></div>`;
+    }).join('');
+    pbox.querySelectorAll('[data-pv]').forEach(inp => inp.onchange = () => { const v = parseFloat(inp.value); simState.volts[+inp.dataset.pv] = isFinite(v) ? v : 0; saveSim(); renderItems(); });
+    pbox.querySelectorAll('[data-pset]').forEach(b => b.onclick = () => { simState.volts[+b.dataset.pset] = b.dataset.v==='vcc' ? simState.vcc : 0; saveSim(); renderItems(); });
+    const vi = pbox.querySelector('[data-vcc]'); if(vi) vi.onchange = () => { const v = parseFloat(vi.value); simState.vcc = isFinite(v) ? v : 5; saveSim(); renderItems(); };
+  }
+  const box = $('#simSw'); if(!box) return;
+  const rows = [];
+  S.parts.forEach(p => {
+    const d = partDef(p.partId); if(!d || !d.sim) return;
+    let st = '';
+    if(d.sim.type==='spdt') st = `COM→${simState.sw[p.id]==='B'?'B':'A'}`;
+    if(d.sim.type==='button') st = simState.sw[p.id]===true ? '눌림' : '뗌';
+    if(d.sim.type==='dipsw'){ const a = Array.isArray(simState.sw[p.id]) ? simState.sw[p.id] : []; st = Array.from({length:p.pins.length/2}, (_,k) => a[k] ? '1' : '0').join(''); }
+    rows.push(`<div class="row"><span style="flex:1"><b>${esc(p.ref)}</b> <span class="muted">${esc(d.name)}</span></span><button class="btn sm" data-sw="${p.id}">${esc(st)}</button></div>`);
+  });
+  box.innerHTML = rows.join('') || '<div class="muted">스위치 없음.</div>';
+  box.querySelectorAll('[data-sw]').forEach(b => b.onclick = () => {
+    const p = S.parts.find(x => x.id===b.dataset.sw); const d = partDef(p.partId);
+    if(d.sim.type==='dipsw'){ // 버튼으로는 1번부터 순서대로 하나씩 켜지 않고, 전체 반전
+      const half = p.pins.length/2; const a = Array.isArray(simState.sw[p.id]) ? simState.sw[p.id] : new Array(half).fill(false);
+      simState.sw[p.id] = a.every(Boolean) ? new Array(half).fill(false) : new Array(half).fill(true);
+      trySet(STORE_SIM, JSON.stringify(simState));
+    } else simToggle(p);
+    renderItems(); renderSimPanel();
+  });
+  const out = $('#simOut'); const lines = [];
+  S.parts.forEach(p => {
+    const d = partDef(p.partId); if(!d) return;
+    if(d.kind==='two' && d.style==='led'){ const s = simRes && simRes.leds.get(p.id); lines.push(`<div class="row"><span style="flex:1"><b>${esc(p.ref)}</b> <span class="muted">${esc(d.name)}</span></span><b style="color:${s==='on'?'var(--ok)':s==='x'?'#a24be0':'var(--muted)'}">${s==='on'?'켜짐':s==='x'?'모름':'꺼짐'}</b></div>`); }
+    if(d.style==='seg7'){ const l = (simRes && simRes.segs.get(p.id)) || {}; const on = Object.keys(l).filter(k => l[k]===true); lines.push(`<div class="row"><span style="flex:1"><b>${esc(p.ref)}</b> <span class="muted">${esc(d.name)}</span></span><b>${on.length ? esc(on.join('')) : '꺼짐'}</b></div>`); }
+  });
+  out.innerHTML = lines.join('') || '<div class="muted">LED나 7세그먼트가 없다.</div>';
+}
+function setupSimUI(){
+  document.title = '잠실 시뮬레이션';
+  $('header h1').textContent = `잠실 브레드보드 · 시뮬레이션 v${APP_VERSION}`;
+  ['#bUndo','#bRedo','#bNew','#bOpen','#bSave','#bSim'].forEach(s => { const e = $(s); if(e) e.hidden = true; });
+  $('#title').readOnly = true;
+  document.querySelector('header').style.background = '#2a1d3a';
+  const aside = document.querySelector('aside');
+  aside.innerHTML = `<h3>시뮬레이션 (읽기 전용)</h3>
+    <p class="muted" style="margin-top:0">설계는 편집기 창에서 한다. 여기서는 입력 전압과 스위치만 바꾼다. 편집기에서 고치면 자동으로 따라온다.</p>
+    <div class="row"><label>논리 계열</label><select id="simFam"><option value="LS">74LS (떠 있는 입력 = 1)</option><option value="HC">74HC (떠 있는 입력 = 모름)</option></select></div>
+    <div class="row"><button class="btn" id="simReload">다시 불러오기</button><button class="btn" id="simReset">입력 초기화</button></div>
+    <div class="muted" id="simSrc" style="font-size:11px"></div>
+    <h3>전원 공급기 (바인딩 포스트)</h3>
+    <div class="muted" style="font-size:11px;margin-bottom:4px">기본 입력 경로다. 입력 포스트는 보드 위에서 클릭해도 0V ↔ VCC로 바뀐다. 모든 채널의 − 단자는 GND 포스트와 공통이라고 가정한다.</div>
+    <div id="simPsu"></div>
+    <h3>보조 입력 (스위치)</h3><div id="simSw"></div>
+    <h3>출력</h3><div id="simOut"></div>
+    <h3>계산 방식</h3><div class="muted" style="line-height:1.6">정지 상태 논리만 계산한다. 시간, 지연, 전압·전류는 보지 않는다. 플립플롭·카운터·555는 출력을 모름(X)으로 둔다.</div>`;
+  $('#simFam').value = simState.family;
+  $('#simFam').onchange = e => { simState.family = e.target.value; saveSim(); renderItems(); };
+  $('#simReload').onclick = () => requestDesign(true);
+  $('#simReset').onclick = () => { simState.sw = {}; simState.volts = {}; simState.vcc = 5; saveSim(); renderItems(); };
+  document.querySelector('.tab[data-tab="add"]').hidden = true;
+  document.querySelector('.tab[data-tab="settings"]').hidden = true;
+  document.querySelector('.tab[data-tab="check"]').firstChild.textContent = '경고';
+  const st = document.createElement('style');
+  st.textContent = '.lg{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px}.pg{cursor:pointer}';
+  document.head.appendChild(st);
+  document.getElementById('app').className = 'app mode-sim';
+  $('#hint').textContent = '입력은 전원 공급기 포스트 전압으로 넣는다(왼쪽 패널 또는 포스트 클릭). 구멍을 클릭하면 값과 연결 관계가 나온다.';
+}
+let _gotDesign = false;
+function applyIncoming(msg, src){
+  if(Array.isArray(msg.lib)) userLib = msg.lib;
+  const keepZoom = _gotDesign ? zoom : null;
+  const keepSel = selection;
+  loadDesign(JSON.parse(msg.design));
+  if(keepZoom){ zoom = keepZoom; applyZoom(); }
+  if(keepSel && keepSel.type==='net' && keepSel.hole && nodes.has(keepSel.hole)){ selection = {type:'net', id:nets().netOfHole(keepSel.hole), hole:keepSel.hole}; refreshHighlights(); refreshInfo(); }
+  _gotDesign = true;
+  renderSimPanel();
+  $('#simSrc').textContent = `${src} · ${new Date().toLocaleTimeString()}`;
+}
+function requestDesign(manual){
+  if(window.opener && !window.opener.closed){
+    try{ window.opener.postMessage({type:'bb-need'}, '*'); }catch(e){}
+  }
+  setTimeout(() => {
+    if(_gotDesign && !manual) return;
+    if(manual && window.opener && !window.opener.closed) return;
+    const saved = tryGet(STORE_AUTO);
+    if(saved){ applyIncoming({design:saved}, '브라우저 자동 저장본'); }
+    else if(!_gotDesign) $('#tab-info').innerHTML = '<p>설계를 못 받았다. 편집기 창의 <b>시뮬레이션 창 열기</b> 버튼으로 열어라.</p>';
+  }, manual ? 400 : 700);
+}
+window.addEventListener('message', e => {
+  const m = e.data; if(!m || typeof m !== 'object') return;
+  if(SIM && m.type==='bb-design') applyIncoming(m, '편집기 창에서 받음');
+  if(!SIM && m.type==='bb-need'){ simWin = e.source; pushToSim(); }
+});
+function pushToSim(){
+  if(SIM || !simWin || simWin.closed) return;
+  try{ simWin.postMessage({type:'bb-design', design:designJSON(), lib:userLib}, '*'); }catch(e){}
+}
+function openSimWindow(){
+  const url = location.href.split(/[?#]/)[0] + '?mode=sim';
+  const w = window.open(url, 'jamsil-bb-sim', 'width=1500,height=950');
+  if(!w){ flash('팝업이 막혔다. 브라우저에서 이 파일의 팝업을 허용해라.'); return; }
+  simWin = w; w.focus();
+}
+
+
+/* ================= 시작 ================= */
+(function init(){
+  if(SIM){
+    setupSimUI(); drawBoard(); setTool('select');
+    requestAnimationFrame(() => fitZoom());
+    requestDesign(false);
+  } else {
+    const saved = tryGet(STORE_AUTO);
+    let loaded = false;
+    if(saved){ try{ loadDesign(JSON.parse(saved)); loaded = true; }catch(e){} }
+    if(!loaded){ drawBoard(); renderPartList(); }
+    renderSwatches(); setOrientOptions(); syncAddForm(); setTool('select');
+    requestAnimationFrame(() => fitZoom());
+  }
+  window.__bb = {get state(){ return S; }, get nodes(){ return nodes; }, holeName, runChecks: () => runChecks(false), nets: () => nets(),
+    get simRes(){ return simRes; }, get simState(){ return simState; }, simIssues: () => simIssues(), compileLogicText};
+})();
+</script>
+</body>
+</html>
