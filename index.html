@@ -86,7 +86,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;m
 <body>
 <div class="app" id="app">
 <header>
-  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.1</span></h1>
+  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.2</span></h1>
   <input class="title" id="title" placeholder="설계 이름 (예: 3주차 반가산기)">
   <span class="sp"></span>
   <button class="hbtn" id="bSim" style="background:#6b3fd1;border-color:#8a63e6">시뮬레이션 창 열기</button>
@@ -170,7 +170,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;m
     <div class="row"><label style="min-width:auto"><input type="checkbox" id="sFlip"> 행 번호 뒤집기 (1이 아래쪽)</label></div>
     <h3>바인딩 포스트 (왼쪽부터)</h3>
     <div id="postEdit"></div>
-    <p class="muted">VCC/GND: IC 전원. <b>입력(전압원)</b>: 전원 공급기 채널로 논리 입력을 넣는 포스트. 시뮬레이션 창에서 전압(예: 0V/5V)을 정한다. 모든 채널의 − 단자는 GND 포스트와 공통이라고 가정한다. 역할을 VCC/GND로 정하면 점검에서 IC 전원 연결을 그 포스트 기준으로 따진다. 포스트는 보드 내부와 연결돼 있지 않다고 가정한다. 레일까지 선을 직접 그어야 한다.</p>
+    <p class="muted">VCC/GND: IC 전원. <b>입력(전압원)</b>: 전원 공급기 채널로 논리 입력을 넣는 포스트. <b>V−</b>: 연산증폭기용 음전원. 시뮬레이션 창에서 전압(예: 0V/5V)을 정한다. 모든 채널의 − 단자는 GND 포스트와 공통이라고 가정한다. 역할을 VCC/GND로 정하면 점검에서 IC 전원 연결을 그 포스트 기준으로 따진다. 포스트는 보드 내부와 연결돼 있지 않다고 가정한다. 레일까지 선을 직접 그어야 한다.</p>
     <button class="btn primary" id="sApply">설정 적용</button>
     <h3>사용법</h3>
     <div class="muted" style="line-height:1.7">
@@ -201,7 +201,7 @@ const M = 1.5 * P;                    // 여백
 const COLS = ['A','B','C','D','E','F','G','H','I','J'];
 const COLX = [0,1,2,3,4,7,8,9,10,11]; // 스트립 안 열 위치(피치 단위), E-F 사이 홈
 const WIRE_COLORS = ['#d22f2f','#222222','#f2f2f2','#2f6fed','#1f9d55','#f0b400','#f07a1a','#8b4fd8'];
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 const STORE_AUTO = 'jamsil-bb-autosave-v1';
 const STORE_LIB = 'jamsil-bb-library-v1';
 
@@ -247,7 +247,12 @@ const BUILTIN = [
   {id:'SPDT',name:'슬라이드 스위치 SPDT',desc:'3핀 · 가운데 공통',cat:'일렬 소자',kind:'sip',pins:3,pinNames:['A','COM','B'],style:'switch',ref:'SW'},
   {id:'POT',name:'가변저항',desc:'3핀 · 가운데 와이퍼',cat:'일렬 소자',kind:'sip',pins:3,pinNames:['1','W','3'],style:'pot',ref:'VR',value:'10kΩ'},
   {id:'NPN',name:'NPN 트랜지스터(TO-92)',desc:'핀 순서는 데이터시트 확인',cat:'일렬 소자',kind:'sip',pins:3,pinNames:['E','B','C'],style:'to92',ref:'Q'},
-  {id:'SIP-4',name:'핀 헤더 4핀',desc:'일렬',cat:'일렬 소자',kind:'sip',pins:4,pinNames:['1','2','3','4'],style:'header',ref:'J'}
+  {id:'SIP-4',name:'핀 헤더 4핀',desc:'일렬',cat:'일렬 소자',kind:'sip',pins:4,pinNames:['1','2','3','4'],style:'header',ref:'J'},
+  {id:'L',name:'코일(인덕터)',desc:'2핀 · 직류에서는 도선',cat:'2핀 소자',kind:'two',pins:2,pinNames:['1','2'],style:'inductor',ref:'L',value:'10mH',sim:{type:'short'}},
+  {id:'LM741',name:'LM741',desc:'연산증폭기 1회로 (8핀)',cat:'연산증폭기',kind:'dip',pins:8,width:3,ref:'U',pinNames:['OFFSET N1','IN−','IN+','V−','OFFSET N2','OUT','V+','NC'],logic:'# 아날로그 소자\nOUT = X'},
+  {id:'LM358',name:'LM358',desc:'연산증폭기 2회로 (8핀)',cat:'연산증폭기',kind:'dip',pins:8,width:3,ref:'U',pinNames:['OUT1','IN1−','IN1+','V−/GND','IN2+','IN2−','OUT2','V+'],logic:'# 아날로그 소자\nOUT1 = X\nOUT2 = X'},
+  {id:'TL072',name:'TL072',desc:'연산증폭기 2회로 (8핀, LM358과 핀 배치 같음)',cat:'연산증폭기',kind:'dip',pins:8,width:3,ref:'U',pinNames:['OUT1','IN1−','IN1+','V−','IN2+','IN2−','OUT2','V+'],logic:'# 아날로그 소자\nOUT1 = X\nOUT2 = X'},
+  {id:'LM324N',name:'LM324N',desc:'연산증폭기 4회로 (14핀)',cat:'연산증폭기',kind:'dip',pins:14,width:3,ref:'U',pinNames:['OUT1','IN1−','IN1+','V+','IN2+','IN2−','OUT2','OUT3','IN3−','IN3+','V−/GND','IN4+','IN4−','OUT4'],logic:'# 아날로그 소자\nOUT1 = X\nOUT2 = X\nOUT3 = X\nOUT4 = X'}
 ];
 
 /* ================= 상태 ================= */
@@ -425,7 +430,7 @@ function drawBoard(){
     const n = nodes.get(`POST${i}`);
     el('circle', {cx:n.x, cy:n.y, r:P*0.95, fill:po.color, stroke:'#000', 'stroke-width':1}, g);
     el('circle', {cx:n.x, cy:n.y, r:P*0.35, fill:'#c9b27a', stroke:'#6b5a2e'}, g);
-    el('text', {x:n.x, y:n.y + P*1.9, 'text-anchor':'middle', 'font-size':10, fill:'#ddd'}, g, po.label + (po.role==='IN' ? ' (입력)' : po.role!=='none' ? ` (${po.role})` : ''));
+    el('text', {x:n.x, y:n.y + P*1.9, 'text-anchor':'middle', 'font-size':10, fill:'#ddd'}, g, po.label + (po.role==='IN' ? ' (입력)' : po.role==='VNEG' ? ' (V−)' : po.role!=='none' ? ` (${po.role})` : ''));
   });
   el('text', {x:M, y:geom.postsY + 4, 'font-size':12, fill:'#bbb', 'font-weight':600}, g, S.meta.title || '잠실 브레드보드');
   // 상단 레일
@@ -566,6 +571,11 @@ function drawPartBase(p){
     if(def.style==='led'){
       el('circle', {cx:0, cy:0, r:0.78*P, fill:def.color||'#e33', 'fill-opacity':.85, stroke:isSel?'#2f6fed':'#333', 'stroke-width':isSel?2.5:1}, bg);
       el('rect', {x:0.55*P, y:-0.85*P, width:0.2*P, height:1.7*P, fill:'#333', opacity:.5}, bg);
+    } else if(def.style==='inductor'){
+      const n = 4, w = bl/n; let dd = `M${-bl/2},0`;
+      for(let k=0;k<n;k++) dd += ` a${w/2},${w*0.55} 0 0 1 ${w},0`;
+      el('rect', {x:-bl/2 - 1, y:-0.55*P, width:bl + 2, height:0.75*P, rx:2, fill:'#3a2a1a', opacity:.35}, bg);
+      el('path', {d:dd, fill:'none', stroke:isSel?'#2f6fed':'#c07a30', 'stroke-width':2.4, 'stroke-linecap':'round'}, bg);
     } else if(def.style==='cap'){
       el('ellipse', {cx:0, cy:0, rx:Math.min(bl/2,0.8*P), ry:0.55*P, fill:'#e0913a', stroke:isSel?'#2f6fed':'#8a4f14', 'stroke-width':isSel?2.5:1}, bg);
     } else {
@@ -943,7 +953,9 @@ function runChecks(render){
   S.settings.posts.forEach((po,i) => { if(po.role==='VCC') vccPosts.push(i); if(po.role==='GND') gndPosts.push(i); });
   const vccNets = new Set(vccPosts.map(i => N.netOfHole(`POST${i}`)));
   const gndNets = new Set(gndPosts.map(i => N.netOfHole(`POST${i}`)));
-  vccNets.forEach(r => { if(gndNets.has(r)) push('err', 'VCC와 GND가 같은 넷이다. 전원 단락! 전원 켜지 마라.', [`POST${vccPosts[0]}`]); });
+  const roleNets = new Map();
+  S.settings.posts.forEach((po,i) => { if(po.role==='none') return; const r = N.netOfHole(`POST${i}`); if(!roleNets.has(r)) roleNets.set(r, []); roleNets.get(r).push({po, i}); });
+  roleNets.forEach(list => { if(list.length < 2) return; const roles = new Set(list.map(x => x.po.role)); if(roles.size > 1 || roles.has('IN') || roles.has('VNEG')) push('err', `전원 포스트끼리 직접 연결됐다(${list.map(x => x.po.label + ' ' + (x.po.role==='VNEG'?'V−':x.po.role==='IN'?'입력':x.po.role)).join(', ')}). 전원 단락! 전원 켜지 마라.`, [`POST${list[0].i}`]); });
   const wiredPost = i => S.wires.some(w => w.a===`POST${i}` || w.b===`POST${i}`);
   const vccWired = vccPosts.some(wiredPost), gndWired = gndPosts.some(wiredPost);
   if(S.parts.some(p => { const d = partDef(p.partId); return d && d.vcc; })){
@@ -1000,7 +1012,7 @@ function fillSettings(){
   const box = $('#postEdit'); box.innerHTML = '';
   s.posts.forEach((po,i) => {
     const d = document.createElement('div'); d.className = 'postrow';
-    d.innerHTML = `<input type="color" value="${po.color}" data-i="${i}" data-f="color"><input type="text" value="${esc(po.label)}" data-i="${i}" data-f="label"><select data-i="${i}" data-f="role"><option value="none">역할 없음</option><option value="VCC">VCC</option><option value="GND">GND</option><option value="IN">입력 (전압원)</option></select>`;
+    d.innerHTML = `<input type="color" value="${po.color}" data-i="${i}" data-f="color"><input type="text" value="${esc(po.label)}" data-i="${i}" data-f="label"><select data-i="${i}" data-f="role"><option value="none">역할 없음</option><option value="VCC">VCC</option><option value="GND">GND</option><option value="IN">입력 (전압원)</option><option value="VNEG">V− (음전원)</option></select>`;
     box.appendChild(d); d.querySelector('select').value = po.role;
   });
 }
@@ -1179,7 +1191,7 @@ $$('.tool').forEach(t => t.onclick = () => setTool(t.dataset.tool));
 /* ================= 시뮬레이션 (1단계: 정지 상태 논리) ================= */
 const SIM = new URLSearchParams(location.search).get('mode') === 'sim';
 const STORE_SIM = 'jamsil-bb-simstate-v1';
-let simState = (() => { try{ const o = JSON.parse(tryGet(STORE_SIM) || 'null'); if(o && o.sw){ o.volts = o.volts || {}; if(o.vcc===undefined) o.vcc = 5; return o; } }catch(e){} return {sw:{}, family:'LS', volts:{}, vcc:5}; })();
+let simState = (() => { try{ const o = JSON.parse(tryGet(STORE_SIM) || 'null'); if(o && o.sw){ o.volts = o.volts || {}; if(o.vcc===undefined) o.vcc = 5; if(o.vneg===undefined) o.vneg = -5; return o; } }catch(e){} return {sw:{}, family:'LS', volts:{}, vcc:5, vneg:-5}; })();
 const THRESH = {LS:{vil:0.8, vih:2.0, vccMin:4.75, vccMax:5.25}, HC:{vil:1.5, vih:3.5, vccMin:2.0, vccMax:6.0}};
 function voltToLogic(v){ const t = THRESH[simState.family] || THRESH.LS; if(!(isFinite(v))) return 'X'; if(v <= t.vil) return 0; if(v >= t.vih) return 1; return 'X'; }
 function postVolt(i){ const v = simState.volts[i]; return typeof v === 'number' && isFinite(v) ? v : 0; }
@@ -1363,6 +1375,7 @@ function simSwitchUnions(uni){
     const st = simState.sw[p.id];
     if(d.sim.type==='spdt'){ const to = (st==='B') ? p.pins[2] : p.pins[0]; uni(g(p.pins[1]), g(to)); }
     else if(d.sim.type==='button'){ if(st===true) uni(g(p.pins[0]), g(p.pins[1])); }
+    else if(d.sim.type==='short'){ uni(g(p.pins[0]), g(p.pins[1])); }
     else if(d.sim.type==='dipsw'){
       const half = p.pins.length/2, arr = Array.isArray(st) ? st : [];
       for(let k=0;k<half;k++) if(arr[k]) uni(g(p.pins[k]), g(p.pins[p.pins.length-1-k]));
@@ -1378,25 +1391,30 @@ function simulate(){
   const fixed = [];
   R.inputs = []; R.overV = []; R.vccWarn = null;
   const vcc = simState.vcc, T = THRESH[simState.family] || THRESH.LS;
-  if(S.settings.posts.some(po => po.role==='VCC') && (vcc < T.vccMin || vcc > T.vccMax)) R.vccWarn = `VCC ${vcc.toFixed(2)}V는 ${simState.family} 권장 범위(${T.vccMin}–${T.vccMax}V) 밖이다.`;
+  R.analog = []; R.supplyShort = [];
+  const hasLogicIC = S.parts.some(p => { const d = partDef(p.partId); return d && d.vcc; });
+  if(hasLogicIC && S.settings.posts.some(po => po.role==='VCC') && (vcc < T.vccMin || vcc > T.vccMax)) R.vccWarn = `VCC ${vcc.toFixed(2)}V는 ${simState.family} 권장 범위(${T.vccMin}–${T.vccMax}V) 밖이다.`;
   S.settings.posts.forEach((po,i) => {
-    if(po.role==='VCC') fixed.push({n:net('POST'+i), v: vcc >= 2 ? 1 : 'X', src:`포스트 ${po.label} (VCC ${vcc.toFixed(2)}V)`});
-    if(po.role==='GND') fixed.push({n:net('POST'+i), v:0, src:`포스트 ${po.label} (GND 0V)`});
+    if(po.role==='VCC') fixed.push({n:net('POST'+i), v: vcc >= 2 ? 1 : 'X', volt:vcc, src:`포스트 ${po.label} (VCC ${vcc.toFixed(2)}V)`});
+    if(po.role==='GND') fixed.push({n:net('POST'+i), v:0, volt:0, src:`포스트 ${po.label} (GND 0V)`});
+    if(po.role==='VNEG') fixed.push({n:net('POST'+i), v:voltToLogic(simState.vneg), volt:simState.vneg, src:`포스트 ${po.label} (V− ${simState.vneg.toFixed(2)}V)`});
     if(po.role==='IN'){
       const v = postVolt(i), lv = voltToLogic(v);
-      fixed.push({n:net('POST'+i), v:lv, src:`포스트 ${po.label} (입력 ${v.toFixed(2)}V)`});
+      fixed.push({n:net('POST'+i), v:lv, volt:v, src:`포스트 ${po.label} (입력 ${v.toFixed(2)}V)`});
       R.inputs.push({i, v, lv});
       if(v > vcc + 0.5 || v < -0.5) R.overV.push({i, v});
     }
   });
-  if(!fixed.some(f => f.v===1)) R.noSupply.push('VCC 역할 포스트가 없다');
+  if(hasLogicIC && !fixed.some(f => f.v===1)) R.noSupply.push('VCC 역할 포스트가 없다');
+  { const byNet = new Map(); fixed.forEach(f => { if(!byNet.has(f.n)) byNet.set(f.n, []); byNet.get(f.n).push(f); });
+    byNet.forEach(list => { if(new Set(list.map(f => f.volt)).size > 1) R.supplyShort.push(list); }); }
   const resistors = [], logicParts = [];
   S.parts.forEach(p => {
     const d = partDef(p.partId); if(!d) return;
     if(d.kind==='two' && d.style==='resistor'){ resistors.push([net(p.pins[0]), net(p.pins[1])]); return; }
     const c = compiled(d);
     if(c && c.err){ R.badlogic.push({p, d, err:c.err}); return; }
-    if(c){ logicParts.push({p, d, c}); if(/^#\s*(순차|시간)/m.test(d.logic||'')) R.seq.push(p); return; }
+    if(c){ logicParts.push({p, d, c}); if(/^#\s*(순차|시간)/m.test(d.logic||'')) R.seq.push(p); if(/^#\s*아날로그/m.test(d.logic||'')) R.analog.push(p); return; }
     if(d.kind==='dip' && d.style!=='seg7' && d.style!=='dipsw') R.nologic.push(p);
   });
   let outs = new Map(logicParts.map(lp => [lp.p.id, lp.c.outputs.map(o => ({i:o.i, v:'X'}))]));
@@ -1580,7 +1598,7 @@ function drawPart(p){
 
 /* --- 시뮬레이션 창 입력 --- */
 function simToggle(p, evt){
-  const d = partDef(p.partId); if(!d || !d.sim) return false;
+  const d = partDef(p.partId); if(!d || !d.sim || !['spdt','button','dipsw'].includes(d.sim.type)) return false;
   if(d.sim.type==='spdt') simState.sw[p.id] = simState.sw[p.id]==='B' ? 'A' : 'B';
   else if(d.sim.type==='button') simState.sw[p.id] = !(simState.sw[p.id]===true);
   else if(d.sim.type==='dipsw'){
@@ -1615,6 +1633,7 @@ function drawPostOverlays(){
     if(po.role==='IN'){ const v = postVolt(i), lv = voltToLogic(v); t = `${v.toFixed(1)}V→${lv}`; col = lv===1 ? '#ff8a8d' : lv===0 ? '#8fb3ff' : '#d7a6ff'; }
     else if(po.role==='VCC') t = `${simState.vcc.toFixed(1)}V`;
     else if(po.role==='GND') t = '0V';
+    else if(po.role==='VNEG') t = `${simState.vneg.toFixed(1)}V`;
     if(!t) return;
     el('rect', {x:n.x - 22, y:n.y - P*2.35, width:44, height:13, rx:3, fill:'#111', stroke:col, 'stroke-width':1}, L.over);
     el('text', {x:n.x, y:n.y - P*2.35 + 9.5, 'font-size':9, fill:col, 'text-anchor':'middle', 'font-weight':700}, L.over, t);
@@ -1658,6 +1677,7 @@ function simIssues(){
   const I = [], R = simRes;
   const push = (lvl, msg, hole) => I.push({lvl, msg, holes: hole ? [hole] : []});
   R.noSupply.forEach(m => push('err', m + '. 보드 설정에서 포스트 역할을 VCC/GND로 정해라.'));
+  (R.supplyShort||[]).forEach(list => push('err', `전원끼리 직접 연결됐다(단락): ${list.map(f => f.src).join(', ')}. 실물에서는 전원 공급기에 과전류가 흐른다.`, null));
   R.overV.forEach(o => push('err', `포스트 ${S.settings.posts[o.i].label} 입력 ${o.v.toFixed(2)}V가 전원 범위(−0.5V ~ VCC+0.5V)를 넘는다. 실물에서는 칩이 상할 수 있다.`, 'POST'+o.i));
   if(R.vccWarn) push('warn', R.vccWarn);
   R.inputs.filter(x => x.lv==='X').forEach(x => { const T = THRESH[simState.family] || THRESH.LS; push('warn', `포스트 ${S.settings.posts[x.i].label} 입력 ${x.v.toFixed(2)}V는 ${simState.family} 기준 0(≤${T.vil}V)도 1(≥${T.vih}V)도 아닌 불확정 구간이다. X로 계산했다.`, 'POST'+x.i); });
@@ -1668,6 +1688,7 @@ function simIssues(){
   R.stateDep.forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''}) 피드백 때문에 출력이 이전 상태에 따라 달라진다(래치 유지 상태). 1단계에서는 모름(X)으로 둔다. 입력으로 세트/리셋하면 값이 정해진다.`, p.pins[0]); });
   R.badlogic.forEach(b => push('warn', `${b.p.ref}(${b.d.name}) 동작 정의 오류: ${b.err}`, b.p.pins[0]));
   R.floating.forEach(f => push('warn', `${f.p.ref}(${f.d.name}) ${f.i+1}번 ${f.d.pinNames[f.i]} 입력이 떠 있다. ${simState.family==='LS' ? 'LS 기준 1로 계산했다. 실물에서는 불안정할 수 있다.' : 'HC 기준 값을 모른다(X).'}`, f.p.pins[f.i]));
+  (R.analog||[]).forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''})는 아날로그 소자라 논리 시뮬레이션에서 출력을 모름(X)으로 둔다. 증폭·필터 동작은 계산하지 않는다.`, p.pins[0]); });
   R.seq.forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''})는 시간에 따라 변하는 소자라 1단계에서 출력을 모름(X)으로 둔다.`, p.pins[0]); });
   R.nologic.forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''})는 동작 정의가 없어 출력을 계산하지 않는다.`, p.pins[0]); });
   return I;
@@ -1696,6 +1717,7 @@ function renderSimPanel(){
       const dot = `<span class="lg" style="background:${esc(po.color)}"></span>`;
       if(po.role==='VCC') return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">VCC</span></span><input type="number" step="0.05" min="0" max="7" value="${simState.vcc}" data-vcc style="width:70px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"> V</div>`;
       if(po.role==='GND') return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">GND · 0V 기준</span></span></div>`;
+      if(po.role==='VNEG') return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">V− (음전원)</span></span><input type="number" step="0.5" min="-20" max="0" value="${simState.vneg}" data-vneg style="width:70px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"> V</div>`;
       if(po.role==='IN'){ const v = postVolt(i), lv = voltToLogic(v);
         return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">입력</span> <b style="color:${lv===1?'#d22f2f':lv===0?'#2f6fed':'#a24be0'}">→ ${lv}</b></span><input type="number" step="0.1" min="-1" max="12" value="${v}" data-pv="${i}" style="width:62px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"> V</div>
           <div class="row" style="margin-left:18px"><button class="btn sm" data-pset="${i}" data-v="0">0V</button><button class="btn sm" data-pset="${i}" data-v="vcc">${simState.vcc.toFixed(1)}V</button><span class="muted" style="font-size:11px">0 ≤ ${T.vil}V · 1 ≥ ${T.vih}V</span></div>`; }
@@ -1703,12 +1725,13 @@ function renderSimPanel(){
     }).join('');
     pbox.querySelectorAll('[data-pv]').forEach(inp => inp.onchange = () => { const v = parseFloat(inp.value); simState.volts[+inp.dataset.pv] = isFinite(v) ? v : 0; saveSim(); renderItems(); });
     pbox.querySelectorAll('[data-pset]').forEach(b => b.onclick = () => { simState.volts[+b.dataset.pset] = b.dataset.v==='vcc' ? simState.vcc : 0; saveSim(); renderItems(); });
+    const vn = pbox.querySelector('[data-vneg]'); if(vn) vn.onchange = () => { const v = parseFloat(vn.value); simState.vneg = isFinite(v) ? v : -5; saveSim(); renderItems(); };
     const vi = pbox.querySelector('[data-vcc]'); if(vi) vi.onchange = () => { const v = parseFloat(vi.value); simState.vcc = isFinite(v) ? v : 5; saveSim(); renderItems(); };
   }
   const box = $('#simSw'); if(!box) return;
   const rows = [];
   S.parts.forEach(p => {
-    const d = partDef(p.partId); if(!d || !d.sim) return;
+    const d = partDef(p.partId); if(!d || !d.sim || !['spdt','button','dipsw'].includes(d.sim.type)) return;
     let st = '';
     if(d.sim.type==='spdt') st = `COM→${simState.sw[p.id]==='B'?'B':'A'}`;
     if(d.sim.type==='button') st = simState.sw[p.id]===true ? '눌림' : '뗌';
@@ -1754,7 +1777,7 @@ function setupSimUI(){
   $('#simFam').value = simState.family;
   $('#simFam').onchange = e => { simState.family = e.target.value; saveSim(); renderItems(); };
   $('#simReload').onclick = () => requestDesign(true);
-  $('#simReset').onclick = () => { simState.sw = {}; simState.volts = {}; simState.vcc = 5; saveSim(); renderItems(); };
+  $('#simReset').onclick = () => { simState.sw = {}; simState.volts = {}; simState.vcc = 5; simState.vneg = -5; saveSim(); renderItems(); };
   document.querySelector('.tab[data-tab="add"]').hidden = true;
   document.querySelector('.tab[data-tab="settings"]').hidden = true;
   document.querySelector('.tab[data-tab="check"]').firstChild.textContent = '경고';
