@@ -90,7 +90,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;m
 <body>
 <div class="app" id="app">
 <header>
-  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.4</span></h1>
+  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.5</span></h1>
   <input class="title" id="title" placeholder="설계 이름 (예: 3주차 반가산기)">
   <span class="sp"></span>
   <button class="hbtn" id="bSim" style="background:#6b3fd1;border-color:#8a63e6">시뮬레이션 창 열기</button>
@@ -168,8 +168,8 @@ textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;m
     <input type="file" id="libIn" accept=".json" hidden>
   </div>
   <div class="tabbody" id="tab-sort" hidden>
-    <p class="muted" style="margin-top:0">같은 회로를 다시 꽂고 다시 배선한다. <b>금지 규칙을 하나라도 어기는 안은 버리고</b>, 지키는 안 중 점수가 가장 낮은 안을 고른다. 원래 판은 <b>수락</b>하기 전까지 그대로다. 수락한 뒤에도 되돌리기(Ctrl+Z)로 돌아갈 수 있다.</p>
-    <div class="row"><label>탐색 시간</label><input type="number" id="srtTime" value="60" min="5" max="600"><span class="muted">초</span></div>
+    <p class="muted" style="margin-top:0">같은 회로를 다시 꽂고 다시 배선한다. <b>금지 규칙을 하나라도 어기는 안은 버리고</b>, 지키는 안 중 점수가 가장 낮은 안을 고른다. CPU 코어가 여럿이면 계산 일꾼(최대 4개)이 시드를 바꿔 동시에 찾고 그중 최고안을 고른다. 원래 판은 <b>수락</b>하기 전까지 그대로다. 수락한 뒤에도 되돌리기(Ctrl+Z)로 돌아갈 수 있다.</p>
+    <div class="row"><label>최대 시간</label><input type="number" id="srtTime" value="20" min="5" max="600"><span class="muted">초 (다듬기가 끝나면 일찍 끝난다)</span></div>
     <div class="row"><label>시드</label><input type="number" id="srtSeed" value="1"><span class="muted">바꾸면 다른 안</span></div>
     <div class="row"><button class="btn primary" id="srtRun">정렬 시작</button><button class="btn" id="srtStop" hidden>멈추고 지금까지 최고안 쓰기</button></div>
     <div id="srtBody" style="margin-top:8px"></div>
@@ -219,7 +219,7 @@ const M = 1.5 * P;                    // 여백
 const COLS = ['A','B','C','D','E','F','G','H','I','J'];
 const COLX = [0,1,2,3,4,7,8,9,10,11]; // 스트립 안 열 위치(피치 단위), E-F 사이 홈
 const WIRE_COLORS = ['#d22f2f','#222222','#f2f2f2','#2f6fed','#1f9d55','#f0b400','#f07a1a','#8b4fd8'];
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const STORE_AUTO = 'jamsil-bb-autosave-v1';
 const STORE_LIB = 'jamsil-bb-library-v1';
 
@@ -1858,11 +1858,11 @@ function openSimWindow(){
 }
 
 
-/* ================= 자동 정렬 (jamsil-bb-sort 이식, v1.4) =================
+/* ================= 자동 정렬 (jamsil-bb-sort 이식, v1.4 · v1.5 가속) =================
    같은 회로를 금지 규칙(H1–H15)을 지키면서 다시 꽂고 다시 배선한다.
    금지 규칙이 0순위이고, 금지를 지키는 안 중 점수가 가장 낮은 안을 고른다.
    점수 = 100×선 수 + 총 길이 + 25×교차 + 40×부품 위 통과 + 기울기 벌점(3×min(|가로|,|세로|), 선당 최대 60) */
-const JamsilSort = (() => {
+function jamsilSortFactory(){
   const COLS = 'ABCDEFGHIJ';
   const COLX = [0, 1, 2, 3, 4, 7, 8, 9, 10, 11];
   const W_WIRE = 100, W_LEN = 1, W_CROSS = 25, W_OVER = 40, W_SLOPE = 3, SLOPE_CAP = 60;
@@ -1953,6 +1953,12 @@ const JamsilSort = (() => {
       } else c = [g];
       this._gh.set(g, c); return c;
     }
+    groupXY(g){
+      let c = this._gxy ? this._gxy.get(g) : null;
+      if (!this._gxy) this._gxy = new Map();
+      if (!c) { c = this.groupHoles(g).map(h => { const p = this.xy(h); return [h, p[0], p[1]]; }); this._gxy.set(g, c); }
+      return c;
+    }
     segOfRailRow(p, sign, row){
       const k = this.vkOfRow.get(row);
       if (k === undefined) return null;
@@ -2011,7 +2017,9 @@ const JamsilSort = (() => {
     return ((d1 > 1e-9 && d2 < -1e-9) || (d1 < -1e-9 && d2 > 1e-9)) && ((d3 > 1e-9 && d4 < -1e-9) || (d3 < -1e-9 && d4 > 1e-9));
   }
   function segRect(p, q, r){
-    const [x0, y0, x1, y1] = r, dx = q[0] - p[0], dy = q[1] - p[1];
+    const [x0, y0, x1, y1] = r;
+    if (Math.max(p[0], q[0]) < x0 || Math.min(p[0], q[0]) > x1 || Math.max(p[1], q[1]) < y0 || Math.min(p[1], q[1]) > y1) return false;
+    const dx = q[0] - p[0], dy = q[1] - p[1];
     let t0 = 0, t1 = 1;
     for (const [pp, qq] of [[-dx, p[0] - x0], [dx, x1 - p[0]], [-dy, p[1] - y0], [dy, y1 - p[1]]]) {
       if (Math.abs(pp) < 1e-12) { if (qq < 0) return false; }
@@ -2353,6 +2361,50 @@ const JamsilSort = (() => {
       return ins.length && role === ins[0] ? 'T2p' : 'T2m';
     }
     build(g){
+      const pl = this.place(g);
+      return pl ? this.route(pl.parts, pl.occ, pl.blocked, pl.gcount, pl.segNet, pl.P) : null;
+    }
+    /* 배치만 보고 점수를 어림한다(선을 실제로 깔지 않는다). 담금질에서 나쁜 안을 미리 거르는 데 쓴다. */
+    estimate(pl){
+      const B = this.B, C = this.C, P = pl.P, parts = pl.parts;
+      if (!this._cent) this._cent = new Map();
+      const cen = g => {
+        let c = this._cent.get(g);
+        if (!c) { const pts = B.groupXY(g); c = [pts.reduce((s, p) => s + p[1], 0) / pts.length, pts.reduce((s, p) => s + p[2], 0) / pts.length]; this._cent.set(g, c); }
+        return c;
+      };
+      const hole = t => { if (!isTerm(t)) return t; const [ref, i] = tsplit(t), m = P[ref]; return parts.get(ref)[m && m[i] !== undefined ? m[i] : i]; };
+      const edge = (a, b) => { const dx = Math.abs(a[0] - b[0]), dy = Math.abs(a[1] - b[1]); return W_WIRE + W_LEN * Math.hypot(dx, dy) + Math.min(SLOPE_CAP, W_SLOPE * Math.min(dx, dy)); };
+      let est = 0;
+      for (const [n, ts] of C.nets) {
+        if (C.isSupply(n)) {
+          const sign = C.sign(n);
+          const seen = new Set();
+          for (const t of ts) {
+            if (!isTerm(t)) continue;
+            const g = B.group(hole(t));
+            if (g[0] !== 'S' || seen.has(g)) continue;
+            seen.add(g);
+            const m = /^S(\d)r\d+([LR])$/.exec(g), s = +m[1], c = cen(g);
+            const xl = 1.5 + 18 * (s - 1) + (sign === 'm' ? 1 : 2), xr = 1.5 + 18 * s + (sign === 'm' ? 1 : 2);
+            est += W_WIRE + Math.min(Math.abs(c[0] - xl) + (m[2] === 'L' ? 0 : 15), Math.abs(c[0] - xr) + (m[2] === 'R' ? 0 : 15));
+          }
+          continue;
+        }
+        const gs = [...new Set(ts.map(t => B.group(hole(t))))];
+        if (gs.length < 2) continue;
+        const pts = gs.map(cen), inT = [0], dist = pts.map((p, i) => i ? edge(pts[0], p) : Infinity);
+        const used = new Uint8Array(pts.length); used[0] = 1;
+        for (let k = 1; k < pts.length; k++) {
+          let bi = -1, bd = Infinity;
+          for (let i = 0; i < pts.length; i++) if (!used[i] && dist[i] < bd) { bd = dist[i]; bi = i; }
+          used[bi] = 1; est += bd;
+          for (let i = 0; i < pts.length; i++) if (!used[i]) { const d = edge(pts[bi], pts[i]); if (d < dist[i]) dist[i] = d; }
+        }
+      }
+      return est;
+    }
+    place(g){
       if (!this.feasible(g)) return null;
       const B = this.B, C = this.C;
       const parts = new Map(), occ = new Map(), blocked = new Set(), gcount = new Map();
@@ -2419,44 +2471,48 @@ const JamsilSort = (() => {
         const pp = parts.get(ref), dd = B.dist(pp[0], pp[1]);
         if (!(lo - 1e-6 <= dd && dd <= hi + 1e-6)) return null;
       }
-      return this.route(parts, occ, blocked, gcount, segNet, P);
+      return {parts, occ, blocked, gcount, segNet, P};
     }
     route(parts, occ, blocked, gcount, segNet, P){
       const B = this.B, C = this.C;
       const wires = [], segs = [];
       const body = C.ics.map(ref => bodyRect(B, parts.get(ref), 'dip')).concat(C.switches.map(ref => bodyRect(B, parts.get(ref), 'sw')));
-      const free = g => {
+      const free = g => {                       // [구멍, x, y] 목록
         if (g[0] === 'S' && (gcount.get(g) || 0) >= GROUP_CAP) return [];
-        return B.groupHoles(g).filter(h => !occ.has(h) && !blocked.has(h));
+        const out = [];
+        for (const e of B.groupXY(g)) if (!occ.has(e[0]) && !blocked.has(e[0])) out.push(e);
+        return out;
       };
       const cent = new Map();
       const centroid = g => {
         let c = cent.get(g);
-        if (!c) { const pts = B.groupHoles(g).map(h => B.xy(h)); c = [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length]; cent.set(g, c); }
+        if (!c) { const pts = B.groupXY(g); c = [pts.reduce((s, p) => s + p[1], 0) / pts.length, pts.reduce((s, p) => s + p[2], 0) / pts.length]; cent.set(g, c); }
         return c;
       };
-      const near = (hs, pt, k) => hs.map(h => [(B.xy(h)[0] - pt[0]) ** 2 + (B.xy(h)[1] - pt[1]) ** 2, h]).sort((a, b) => a[0] - b[0]).slice(0, k).map(x => x[1]);
+      const near = (es, pt, k) => es.map(e => [(e[1] - pt[0]) ** 2 + (e[2] - pt[1]) ** 2, e]).sort((a, b) => a[0] - b[0]).slice(0, k).map(x => x[1]);
       const bestPair = (ga, gb) => {
         let fa = free(ga), fb = free(gb);
         if (!fa.length || !fb.length) return null;
         if (fa.length > 4) fa = near(fa, centroid(gb), 4);
         if (fb.length > 4) fb = near(fb, centroid(ga), 4);
-        let best = null;
-        for (const a of fa) {
-          const pa = B.xy(a);
-          for (const b of fb) {
-            const pb = B.xy(b);
-            let c = W_LEN * Math.hypot(pa[0] - pb[0], pa[1] - pb[1]) + slopePen(pa, pb);
-            if (best && c >= best[0]) continue;
-            for (const r of body) if (segRect(pa, pb, r)) c += W_OVER;
-            if (!best || c < best[0]) best = [c, a, b];
+        let bc = Infinity, ba = null, bb = null;
+        for (const ea of fa) {
+          const ax = ea[1], ay = ea[2];
+          for (const eb of fb) {
+            const bx = eb[1], by = eb[2];
+            const adx = Math.abs(ax - bx), ady = Math.abs(ay - by);
+            let c = W_LEN * Math.hypot(adx, ady) + Math.min(SLOPE_CAP, W_SLOPE * Math.min(adx, ady));
+            if (ba && c >= bc) continue;
+            const mnx = ax < bx ? ax : bx, mxx = ax < bx ? bx : ax, mny = ay < by ? ay : by, mxy = ay < by ? by : ay;
+            for (const r of body) if (!(mxx < r[0] || mnx > r[2] || mxy < r[1] || mny > r[3]) && segRect([ax, ay], [bx, by], r)) c += W_OVER;
+            if (!ba || c < bc) { bc = c; ba = ea; bb = eb; }
           }
         }
-        if (!best) return null;
-        const pa = B.xy(best[1]), pb = B.xy(best[2]);
+        if (!ba) return null;
+        const pa = [ba[1], ba[2]], pb = [bb[1], bb[2]];
         let x = 0;
         for (const sg of segs) if (segIntersect(pa, pb, sg[0], sg[1])) x++;
-        return [best[0] + W_CROSS * x, best[1], best[2]];
+        return [bc + W_CROSS * x, ba[0], bb[0]];
       };
       let total = 0;
       const lay = (a, b, net, cost) => {
@@ -2525,7 +2581,9 @@ const JamsilSort = (() => {
             for (const hv of halvesV) {
               const rg = ck + hv, fr = free(rg);
               if (!fr.length) continue;
-              const dmin = Math.sqrt(Math.min(...fr.map(h => (B.xy(h)[0] - cg[0]) ** 2 + (B.xy(h)[1] - cg[1]) ** 2)));
+              let dm = Infinity;
+              for (const e of fr) { const d = (e[1] - cg[0]) ** 2 + (e[2] - cg[1]) ** 2; if (d < dm) dm = d; }
+              const dmin = Math.sqrt(dm);
               pre.push([dmin + extra, extra, rg]);
             }
           }
@@ -2573,7 +2631,7 @@ const JamsilSort = (() => {
         let tn = null, td = Infinity;
         for (const t of ts) {
           const fr = free(t);
-          const d = fr.length ? Math.min(...fr.map(h => B.dist(posts[0], h))) : Infinity;
+          const d = fr.length ? Math.min(...fr.map(e => B.dist(posts[0], e[0]))) : Infinity;
           if (d < td) { td = d; tn = t; }
         }
         if (tn === null) return null;
@@ -2697,19 +2755,23 @@ const JamsilSort = (() => {
     const C = new Circuit(design, defs, B);
     const L = new Layout(C);
     const R = rng(opts.seed || 1);
-    const total = Math.max(3, opts.seconds || 30) * 1000;
-    const t0 = now(), tAnneal = t0 + total * 2 / 3, tEnd = t0 + total;
-    let slice = now(), tries = 0, best = null, phase = '탐색';
+    const total = Math.max(3, opts.seconds || 20) * 1000;
+    const t0 = now(), tAnneal = t0 + total * 0.6, tEnd = t0 + total;
+    const patience = opts.patience !== undefined ? opts.patience * 1000 : Infinity;   // 기본: 담금질은 정해진 몫(60%)을 다 쓴다         // 이만큼 최고 점수가 안 나아지면 탐색을 끝낸다
+    let slice = now(), tries = 0, routed = 0, best = null, phase = '탐색', lastGain = now();
     const tick = async () => {
       if (now() - slice > 40) {
-        if (opts.onProgress) opts.onProgress({elapsed: (now() - t0) / 1000, total: total / 1000, tries, best: best ? best.score : null, phase});
+        if (opts.onProgress) opts.onProgress({elapsed: (now() - t0) / 1000, total: total / 1000, tries, routed, best: best ? best.score : null, phase});
         await yieldNow(); slice = now();
       }
     };
     const stop = () => opts.shouldStop && opts.shouldStop();
+    const full = pl => { routed++; return L.route(pl.parts, pl.occ, pl.blocked, pl.gcount, pl.segNet, pl.P); };
+    const setBest = (score, g, res) => { if (!best || score < best.score - 1e-6) { best = {score, g, res}; lastGain = now(); } };
     let first = true;
-    while (now() < tAnneal && !stop()) {
-      let g = null, cur = null;
+    // 1) 담금질. 배치만 보고 어림한 점수로 가망 없는 안은 배선하지 않고 버린다(1차 거르기).
+    while (now() < tAnneal && now() - lastGain < patience && !stop()) {
+      let g = null, cur = null, curEst = 0;
       for (let a = 0; a < 200 && !g && !stop(); a++) {
         let g0 = first ? genomeFromDesign(L, R) : randomGenome(L, R);
         if (first) {
@@ -2718,31 +2780,38 @@ const JamsilSort = (() => {
         }
         if (!g0) continue;
         tries++;
-        const r0 = evaluate(L, g0);
-        if (r0) { g = g0; cur = r0; }
+        const pl = L.place(g0);
+        const r0 = pl && full(pl);
+        if (r0) { g = g0; cur = r0; curEst = L.estimate(pl); }
         await tick();
       }
       if (!g) continue;
-      if (!best || cur.score < best.score) best = {score: cur.score, g, res: cur};
-      const runStart = now(), runEnd = Math.min(tAnneal, runStart + Math.max(10000, (tAnneal - t0) / 3));
-      while (now() < runEnd && !stop()) {
+      setBest(cur.score, g, cur);
+      const runStart = now(), runEnd = Math.min(tAnneal, runStart + Math.max(4000, (tAnneal - t0) / 3));
+      while (now() < runEnd && now() - lastGain < patience && !stop()) {
         const frac = (now() - runStart) / Math.max(1, runEnd - runStart);
         const T = 200 * Math.pow(0.005, frac);
         const g2 = mutate(g, L, R); tries++;
-        const r2 = evaluate(L, g2);
+        const pl = L.place(g2);
+        if (!pl) { await tick(); continue; }
+        const e2 = L.estimate(pl), de = e2 - curEst;
+        if (de > 0 && R.random() >= Math.exp(-de / T)) { await tick(); continue; }
+        const r2 = full(pl);
         if (r2 && (r2.score <= cur.score || R.random() < Math.exp((cur.score - r2.score) / T))) {
-          g = g2; cur = r2;
-          if (cur.score < best.score) best = {score: cur.score, g, res: cur};
+          g = g2; cur = r2; curEst = e2;
+          setBest(cur.score, g, cur);
         }
         await tick();
       }
     }
-    // 다듬기: 하나씩 모든 자리에 놓아 보고 나아지면 옮긴다
+    // 2) 다듬기: 하나씩 모든 자리에 놓아 보고 나아지면 옮긴다. 어림 점수가 지금보다 확실히 나쁜 자리는 배선하지 않는다.
     if (best && !stop()) {
       phase = '다듬기';
+      const MARGIN = opts.margin !== undefined ? opts.margin : 80;
       let improved = true;
       while (improved && now() < tEnd && !stop()) {
         improved = false;
+        const bp = L.place(best.g), bestEst = bp ? L.estimate(bp) : Infinity;
         const cands = [];
         for (const ref of C.ics) for (let s = 1; s <= 4; s++) for (let r = 1; r <= B.R - L.icH(ref) + 1; r++) cands.push(['ic', ref, [s, r]]);
         for (let k = 0; k < C.swbanks.length; k++) for (let s = 1; s <= 4; s++) for (const half of ['L', 'R']) for (const col of [0, 2, 4]) for (let r = 1; r < B.R; r++) cands.push(['sw', k, [s, r, half, col]]);
@@ -2761,13 +2830,16 @@ const JamsilSort = (() => {
           else g2.gs[key][1][val[0]] = val[1];
           if ((kind === 'ic' || kind === 'sw' || kind === 'un') && !L.feasible(g2)) continue;
           tries++;
-          const r2 = evaluate(L, g2);
-          if (r2 && r2.score < best.score - 1e-6) { best = {score: r2.score, g: g2, res: r2}; improved = true; }
+          const pl = L.place(g2);
+          if (!pl) { await tick(); continue; }
+          if (L.estimate(pl) > bestEst + MARGIN) { await tick(); continue; }
+          const r2 = full(pl);
+          if (r2 && r2.score < best.score - 1e-6) { setBest(r2.score, g2, r2); improved = true; }
           await tick();
         }
       }
     }
-    if (opts.onProgress) opts.onProgress({elapsed: (now() - t0) / 1000, total: total / 1000, tries, best: best ? best.score : null, phase: '검사'});
+    if (opts.onProgress) opts.onProgress({elapsed: (now() - t0) / 1000, total: total / 1000, tries, routed, best: best ? best.score : null, phase: '검사'});
     if (!best) return {ok: false, error: '금지 규칙을 지키는 배치를 찾지 못했다. 시간을 늘리거나 부품 수를 확인해라.', tries};
     const out = L.toDesign(best.res);
     const cand = {settings: design.settings, parts: out.parts, wires: out.wires};
@@ -2780,7 +2852,7 @@ const JamsilSort = (() => {
       if (ch.length) remap[ref] = ch.join(', ');
     }
     return {ok: bad.length === 0, error: bad.length ? '검사기가 금지 위반을 잡았다. 결과를 버린다: ' + bad.slice(0, 3).join(' / ') : null,
-            bad, tries, elapsed: (now() - t0) / 1000, design: out, perm: best.res.P, remap,
+            bad, tries, routed, elapsed: (now() - t0) / 1000, design: out, perm: best.res.P, remap,
             before: scoreDesign(B, design, defs), beforeBad: checkRules(B, design, defs), after: scoreDesign(B, cand, defs)};
   }
 
@@ -2801,10 +2873,11 @@ const JamsilSort = (() => {
             ['H14', '세로 레일 10열 전부 전원에 연결 (− 열 GND, + 열 VCC 또는 입력)'],
             ['H15', 'IC·스위치 몸체 끝 바로 위·아래 행에 다른 부품 다리를 꽂지 않는다']
           ]};
-})();
+}
+const JamsilSort = jamsilSortFactory();
 
-/* ================= 자동 정렬 화면 (v1.4) ================= */
-let sortState = {running: false, stop: false, result: null, preview: false, orig: null, progress: null, error: null, accepted: null};
+/* ================= 자동 정렬 화면 (v1.4, v1.5: 계산 일꾼 여러 개) ================= */
+let sortState = {running: false, stop: false, result: null, preview: false, orig: null, progress: null, error: null, accepted: null, workers: null};
 function sortBusy(){ return sortState.running || !!sortState.result; }
 function sortGuard(){
   if(SIM || !sortBusy()) return false;
@@ -2843,33 +2916,98 @@ function sortAccept(){
   sortState.accepted = {after: res.after, remap: res.remap};
   renderSortPanel();
 }
+/* 계산 일꾼(Web Worker): 정렬기 코드를 그대로 넘겨서 시드만 다르게 동시에 돌린다 */
+function sortWorkerCount(){
+  const hc = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
+  return Math.max(1, Math.min(4, hc - 1));
+}
+function sortWorkerSource(){
+  return 'const JamsilSort = (' + jamsilSortFactory.toString() + ')();\n' +
+    'let stopFlag = false;\n' +
+    'self.onmessage = async e => {\n' +
+    '  const m = e.data;\n' +
+    '  if (m.type === "stop") { stopFlag = true; return; }\n' +
+    '  if (m.type !== "run") return;\n' +
+    '  const defs = new Map(m.defs);\n' +
+    '  let r;\n' +
+    '  try { r = await JamsilSort.run(m.design, id => defs.get(id), {seconds: m.seconds, seed: m.seed, onProgress: p => self.postMessage({type: "progress", p}), shouldStop: () => stopFlag}); }\n' +
+    '  catch (err) { r = {ok: false, error: err.message, fatal: true}; }\n' +
+    '  self.postMessage({type: "done", r});\n' +
+    '};\n';
+}
+function sortRunWorkers(design, secs, seed){
+  const n = sortWorkerCount();
+  let url, workers = [];
+  try{
+    url = URL.createObjectURL(new Blob([sortWorkerSource()], {type: 'text/javascript'}));
+    for(let i = 0; i < n; i++) workers.push(new Worker(url));
+  }catch(err){ workers.forEach(w => w.terminate()); if(url) URL.revokeObjectURL(url); return Promise.resolve(null); }
+  const defs = [...new Set(design.parts.map(p => p.partId))].map(id => [id, partDef(id)]);
+  return new Promise(resolve => {
+    const prog = new Array(n).fill(null), results = new Array(n).fill(null);
+    let left = n, started = false;
+    sortState.workers = workers;
+    const finish = () => { sortState.workers = null; URL.revokeObjectURL(url); resolve({results, started, n}); };
+    const done = (i, r) => { if(results[i]) return; results[i] = r; workers[i].terminate(); if(--left === 0) finish(); };
+    workers.forEach((w, i) => {
+      w.onmessage = e => {
+        const m = e.data;
+        if(m.type === 'progress'){
+          started = true; prog[i] = m.p;
+          const ps = prog.filter(Boolean), bs = ps.map(p => p.best).filter(b => b !== null);
+          sortState.progress = {elapsed: Math.max(...ps.map(p => p.elapsed)), total: ps[0].total, tries: ps.reduce((a, p) => a + p.tries, 0),
+            routed: ps.reduce((a, p) => a + (p.routed || 0), 0), best: bs.length ? Math.min(...bs) : null,
+            phase: ps.every(p => p.phase === '다듬기' || p.phase === '검사') ? '다듬기' : '탐색', workers: n};
+          renderSortProgress();
+        } else if(m.type === 'done') done(i, m.r);
+      };
+      w.onerror = ev => { if(ev.preventDefault) ev.preventDefault(); done(i, {ok: false, error: '계산 일꾼 오류: ' + (ev.message || '알 수 없음'), workerError: true}); };
+      w.postMessage({type: 'run', design, defs, seconds: secs, seed: seed + i * 1009});
+    });
+  });
+}
 async function sortRun(){
   if(SIM || sortState.running) return;
   if(sortState.result) sortDiscard();
   sortState.error = null; sortState.accepted = null;
   if(!S.parts.length){ sortState.error = '판에 부품이 없다.'; renderSortPanel(); return; }
-  const secs = Math.max(5, Math.min(600, parseInt($('#srtTime').value, 10) || 60));
+  const secs = Math.max(5, Math.min(600, parseInt($('#srtTime').value, 10) || 20));
   const seed = parseInt($('#srtSeed').value, 10) || 1;
   $('#srtTime').value = secs;
   const design = JSON.parse(designJSON());
-  sortState.running = true; sortState.stop = false; sortState.progress = {elapsed: 0, total: secs, tries: 0, best: null, phase: '준비'};
+  sortState.running = true; sortState.stop = false; sortState.progress = {elapsed: 0, total: secs, tries: 0, routed: 0, best: null, phase: '준비', workers: 1};
   renderSortPanel();
-  let res;
-  try{
-    res = await JamsilSort.run(design, id => partDef(id), {seconds: secs, seed,
-      onProgress: p => { sortState.progress = p; renderSortProgress(); },
-      shouldStop: () => sortState.stop});
-  }catch(err){ res = {ok: false, error: err.message}; }
+  let res = null, mode = 'workers', nW = 1;
+  const wr = await sortRunWorkers(design, secs, seed);
+  const okWorker = wr && wr.results.some(r => r && !r.workerError);
+  if(okWorker){
+    nW = wr.n;
+    const oks = wr.results.filter(r => r && r.ok);
+    if(oks.length) res = oks.reduce((a, b) => (b.after.score < a.after.score ? b : a));
+    else res = wr.results.find(r => r && r.error) || {ok: false, error: '정렬에 실패했다.'};
+  } else {
+    mode = 'single';                                   // 일꾼을 못 쓰는 환경이면 이 창에서 직접 돌린다
+    try{
+      res = await JamsilSort.run(design, id => partDef(id), {seconds: secs, seed,
+        onProgress: p => { sortState.progress = Object.assign({workers: 1}, p); renderSortProgress(); },
+        shouldStop: () => sortState.stop});
+    }catch(err){ res = {ok: false, error: err.message}; }
+  }
+  if(res && res.ok){                                   // 고른 안을 이 창에서 한 번 더 검사한다
+    const B = new JamsilSort.Board(design.settings);
+    const again = JamsilSort.checkRules(B, {settings: design.settings, parts: res.design.parts, wires: res.design.wires}, id => partDef(id), design, res.perm);
+    if(again.length) res = {ok: false, error: '검사기가 금지 위반을 잡았다. 결과를 버린다: ' + again.slice(0, 3).join(' / ')};
+  }
   sortState.running = false;
-  if(res.ok){ sortState.result = res; sortSetPreview(true); }
-  else sortState.error = res.error || '정렬에 실패했다.';
+  if(res && res.ok){ res.mode = mode; res.workers = nW; sortState.result = res; sortSetPreview(true); }
+  else sortState.error = (res && res.error) || '정렬에 실패했다.';
   renderSortPanel();
 }
 function renderSortProgress(){
   const box = $('#srtProg'); if(!box || !sortState.progress) return;
   const p = sortState.progress, pct = Math.min(100, 100 * p.elapsed / Math.max(1, p.total));
   box.innerHTML = `<div class="srt-bar"><div style="width:${pct.toFixed(1)}%"></div></div>
-    <div class="muted" style="font-size:12px">${esc(p.phase)} · ${p.elapsed.toFixed(0)} / ${p.total.toFixed(0)}초 · 시도 ${p.tries.toLocaleString()}판 · 최고 점수 ${p.best === null ? '-' : p.best.toFixed(1)}</div>`;
+    <div class="muted" style="font-size:12px">${esc(p.phase)} · ${p.elapsed.toFixed(0)} / 최대 ${p.total.toFixed(0)}초 · 계산 일꾼 ${p.workers || 1}개 · 시도 ${p.tries.toLocaleString()}판(배선까지 ${(p.routed || 0).toLocaleString()}판) · 최고 점수 ${p.best === null ? '-' : p.best.toFixed(1)}</div>`;
 }
 function renderSortPanel(){
   const box = $('#srtBody'); if(!box) return;
@@ -2886,8 +3024,10 @@ function renderSortPanel(){
   const b = r.before, a = r.after;
   const row = (name, x, y, fmt) => `<tr><td>${name}</td><td>${fmt ? fmt(x) : x}</td><td><b>${fmt ? fmt(y) : y}</b></td></tr>`;
   const f1 = v => Number(v).toFixed(1);
+  const vb = b.score - 100 * b.wires, va = a.score - 100 * a.wires;
   box.innerHTML = `
-    <div class="okbox"><b>정렬안을 찾았다.</b> 금지 규칙 위반 0건 (검사기 통과). ${r.tries.toLocaleString()}판을 ${r.elapsed.toFixed(0)}초 동안 시도했다.</div>
+    <div class="okbox"><b>정렬안을 찾았다.</b> 금지 규칙 위반 0건 (검사기 통과). ${r.mode === 'workers' ? `계산 일꾼 ${r.workers}개 중 최고안이다.` : '이 창에서 직접 계산했다.'} 이 안을 찾은 일꾼이 ${r.tries.toLocaleString()}판을 ${r.elapsed.toFixed(0)}초 동안 시도했다.</div>
+    <div style="margin:8px 0 0;font-size:13px">줄일 수 있는 몫(길이·교차·부품 위·기울기): <b>${f1(vb)} → ${f1(va)}</b> <span class="muted">(${vb > 0 ? (100 * (vb - va) / vb).toFixed(0) : 0}% 줄임)</span></div>
     <p class="muted" style="margin:8px 0 4px">${sortState.preview ? '지금 판에 정렬안이 보인다. 시뮬레이션 창이 열려 있으면 그쪽도 정렬안을 따라간다.' : '지금 판에는 원래 설계가 보인다.'}</p>
     <div class="row">
       <button class="btn" id="srtToggle">${sortState.preview ? '원래 판 보기' : '정렬안 보기'}</button>
@@ -2904,6 +3044,7 @@ function renderSortPanel(){
       ${row('부품 위 통과', b.over, a.over)}
       ${row('대각선', b.diag, a.diag)}
       ${row('기울기 벌점', b.slope, a.slope, f1)}
+      ${row('줄일 수 있는 몫', vb, va, f1)}
       ${row('점수', b.score, a.score, f1)}
     </table>
     ${r.beforeBad.length ? `<details style="margin-top:6px"><summary class="muted">원래 판의 금지 위반 ${r.beforeBad.length}건 보기</summary>${r.beforeBad.map(x => `<div class="issue" style="cursor:default">${esc(x)}</div>`).join('')}</details>` : ''}
@@ -2919,7 +3060,7 @@ function sortRemapHtml(remap){
     ks.map(k => `<div style="margin:3px 0"><b>${esc(k)}</b> <span style="font-size:12px">${esc(remap[k])}</span></div>`).join('');
 }
 $('#srtRun').onclick = () => { sortRun(); };
-$('#srtStop').onclick = () => { sortState.stop = true; };
+$('#srtStop').onclick = () => { sortState.stop = true; if(sortState.workers) sortState.workers.forEach(w => { try{ w.postMessage({type: 'stop'}); }catch(e){} }); };
 $('#srtRules').innerHTML = JamsilSort.RULES.map(([k, v]) => `<div><b>${k}</b> ${esc(v)}</div>`).join('');
 
 /* ================= 시작 ================= */
@@ -2938,7 +3079,7 @@ $('#srtRules').innerHTML = JamsilSort.RULES.map(([k, v]) => `<div><b>${k}</b> ${
   }
   window.__bb = {get state(){ return S; }, get nodes(){ return nodes; }, holeName, runChecks: () => runChecks(false), nets: () => nets(),
     get simRes(){ return simRes; }, get simState(){ return simState; }, simIssues: () => simIssues(), compileLogicText,
-    sort: {run: () => sortRun(), get state(){ return sortState; }, accept: () => sortAccept(), discard: () => sortDiscard(), preview: on => sortSetPreview(on), lib: JamsilSort}};
+    sort: {run: () => sortRun(), get state(){ return sortState; }, accept: () => sortAccept(), discard: () => sortDiscard(), preview: on => sortSetPreview(on), lib: JamsilSort, workerCount: () => sortWorkerCount()}};
 })();
 </script>
 </body>
