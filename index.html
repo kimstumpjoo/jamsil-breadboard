@@ -81,12 +81,16 @@ textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;m
 .sel-outline{fill:none;stroke:#2f6fed;stroke-width:2;stroke-dasharray:4 3}
 .wire{cursor:pointer}
 .pg{cursor:pointer}
+.srt-bar{height:8px;border-radius:4px;background:#e6e9ef;overflow:hidden;margin:6px 0 4px}
+.srt-bar div{height:100%;background:var(--accent)}
+.srt-tbl td:nth-child(2),.srt-tbl td:nth-child(3),.srt-tbl th:nth-child(2),.srt-tbl th:nth-child(3){text-align:right}
+.srt-rules{font-size:12px;line-height:1.6}
 </style>
 </head>
 <body>
 <div class="app" id="app">
 <header>
-  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.3</span></h1>
+  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.4</span></h1>
   <input class="title" id="title" placeholder="설계 이름 (예: 3주차 반가산기)">
   <span class="sp"></span>
   <button class="hbtn" id="bSim" style="background:#6b3fd1;border-color:#8a63e6">시뮬레이션 창 열기</button>
@@ -130,6 +134,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;m
     <div class="tab" data-tab="check">점검<span class="badge" id="badge" hidden>0</span></div>
     <div class="tab" data-tab="add">부품 추가</div>
     <div class="tab" data-tab="settings">보드 설정</div>
+    <div class="tab" data-tab="sort">정렬</div>
   </div>
   <div class="tabbody" id="tab-info"></div>
   <div class="tabbody" id="tab-check" hidden></div>
@@ -161,6 +166,19 @@ textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;m
     <div id="myParts"></div>
     <div class="row" style="margin-top:8px"><button class="btn" id="libExport">부품 목록 내보내기</button><button class="btn" id="libImport">가져오기</button></div>
     <input type="file" id="libIn" accept=".json" hidden>
+  </div>
+  <div class="tabbody" id="tab-sort" hidden>
+    <p class="muted" style="margin-top:0">같은 회로를 다시 꽂고 다시 배선한다. <b>금지 규칙을 하나라도 어기는 안은 버리고</b>, 지키는 안 중 점수가 가장 낮은 안을 고른다. 원래 판은 <b>수락</b>하기 전까지 그대로다. 수락한 뒤에도 되돌리기(Ctrl+Z)로 돌아갈 수 있다.</p>
+    <div class="row"><label>탐색 시간</label><input type="number" id="srtTime" value="60" min="5" max="600"><span class="muted">초</span></div>
+    <div class="row"><label>시드</label><input type="number" id="srtSeed" value="1"><span class="muted">바꾸면 다른 안</span></div>
+    <div class="row"><button class="btn primary" id="srtRun">정렬 시작</button><button class="btn" id="srtStop" hidden>멈추고 지금까지 최고안 쓰기</button></div>
+    <div id="srtBody" style="margin-top:8px"></div>
+    <h3>점수 (낮을수록 좋다)</h3>
+    <div class="muted srt-rules">100×선 수 + 총 길이(피치) + 25×교차 + 40×부품(IC·스위치) 위 통과 + 기울기 벌점(3×min(|가로|,|세로|), 선당 최대 60)</div>
+    <h3>금지 규칙</h3>
+    <div class="srt-rules" id="srtRules"></div>
+    <h3>배치 틀</h3>
+    <div class="muted srt-rules">스위치는 덩어리별로 한 열에 4행 간격, LED·저항은 한 행에 한 단위씩 2행 간격(원래 순서 유지), IC는 노치 위로 세로로 쌓는다. 부품 띠 사이는 1행 비운다. 전원은 포스트 → 상단 버스(T1+ VCC, T1− GND, T2+ 입력 채널) → 세로 레일 10열 전부로 분배한다. 다룰 수 있는 부품: DIP IC, SPDT 스위치, 2핀 소자(저항·LED 등).</div>
   </div>
   <div class="tabbody" id="tab-settings" hidden>
     <p class="muted" style="margin-top:0">실측 결과가 나오면 여기 값만 바꾼다. 기본값은 사진 판독과 제조사 사양(WBU-208 계열)에서 나온 추정이다.</p>
@@ -201,7 +219,7 @@ const M = 1.5 * P;                    // 여백
 const COLS = ['A','B','C','D','E','F','G','H','I','J'];
 const COLX = [0,1,2,3,4,7,8,9,10,11]; // 스트립 안 열 위치(피치 단위), E-F 사이 홈
 const WIRE_COLORS = ['#d22f2f','#222222','#f2f2f2','#2f6fed','#1f9d55','#f0b400','#f07a1a','#8b4fd8'];
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.4';
 const STORE_AUTO = 'jamsil-bb-autosave-v1';
 const STORE_LIB = 'jamsil-bb-library-v1';
 
@@ -650,6 +668,7 @@ function occupantsOf(h){
 /* ================= 편집 동작 ================= */
 function snapshot(){ return JSON.stringify({wires:S.wires, parts:S.parts, library:S.library, nextId:S.nextId, settings:S.settings}); }
 function commit(fn){
+  if(sortGuard()) return;
   undoStack.push(snapshot()); if(undoStack.length>200) undoStack.shift();
   redoStack = [];
   fn();
@@ -662,8 +681,8 @@ function restore(js){
   if(boardChanged){ drawBoard(); if(!$('#tab-settings').hidden) fillSettings(); } else renderItems();
   autosave();
 }
-function undo(){ if(!undoStack.length) return; redoStack.push(snapshot()); restore(undoStack.pop()); }
-function redo(){ if(!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); }
+function undo(){ if(sortGuard()) return; if(!undoStack.length) return; redoStack.push(snapshot()); restore(undoStack.pop()); }
+function redo(){ if(sortGuard()) return; if(!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); }
 function newId(pfx){ return pfx + (S.nextId++); }
 function nextRef(prefix){
   let m = 0; const re = new RegExp('^' + prefix.replace(/[^A-Za-z]/g,'') + '(\\d+)$');
@@ -754,6 +773,7 @@ svg.addEventListener('mousemove', e => {
 svg.addEventListener('mouseleave', () => { setHover(null); L.ghost.innerHTML=''; });
 svg.addEventListener('click', e => {
   if(SIM){ simClick(e); return; }
+  if(tool !== 'select' && sortGuard()) return;
   const partEl = e.target.closest && e.target.closest('[data-part]');
   const wireEl = e.target.closest && e.target.closest('[data-wire]');
   if(tool==='select'){
@@ -936,7 +956,7 @@ function refreshInfo(){
 }
 $$('.tab').forEach(t => t.onclick = () => {
   $$('.tab').forEach(x => x.classList.toggle('on', x===t));
-  ['info','check','add','settings'].forEach(n => $('#tab-'+n).hidden = (n!==t.dataset.tab));
+  ['info','check','add','settings','sort'].forEach(n => $('#tab-'+n).hidden = (n!==t.dataset.tab));
   if(t.dataset.tab==='check') (SIM ? renderSimIssues(true) : runChecks(true));
   if(t.dataset.tab==='settings') fillSettings();
   if(t.dataset.tab==='add') renderMyParts();
@@ -1020,6 +1040,7 @@ function fillSettings(){
   });
 }
 $('#sApply').onclick = () => {
+  if(sortGuard()) return;
   const s = S.settings;
   const rows = Math.max(20, Math.min(80, parseInt($('#sRows').value,10) || 64));
   const posts = s.posts.map((po,i) => ({
@@ -1124,7 +1145,7 @@ function download(name, content, type){
 }
 function designJSON(){ return JSON.stringify({app:'jamsil-bb', version:1, appVersion:APP_VERSION, savedAt:new Date().toISOString(), meta:S.meta, settings:S.settings, library:S.library, wires:S.wires, parts:S.parts, nextId:S.nextId}, null, 1); }
 function fileBase(){ return (S.meta.title || '브레드보드').replace(/[\\/:*?"<>|]/g,'_'); }
-function autosave(){ if(SIM) return; trySet(STORE_AUTO, designJSON()); pushToSim(); }
+function autosave(){ if(SIM || sortState.preview) return; trySet(STORE_AUTO, designJSON()); pushToSim(); }
 function loadDesign(o){
   if(!o || o.app!=='jamsil-bb') throw new Error('잠실 브레드보드 파일이 아니다.');
   S = {meta:o.meta||{title:''}, settings:Object.assign(defaultSettings(), o.settings||{}), library:o.library||[], wires:o.wires||[], parts:o.parts||[], nextId:o.nextId||1};
@@ -1138,14 +1159,15 @@ function loadDesign(o){
   drawBoard(); fitZoom(); renderPartList();
   if(lost) setTimeout(() => flash(`보드 구조가 바뀌어 없는 구멍을 쓰던 선/부품 ${lost}개를 뺐다.`), 300);
 }
-$('#bSave').onclick = () => download(fileBase() + '.json', designJSON(), 'application/json');
-$('#bOpen').onclick = () => $('#fileIn').click();
+$('#bSave').onclick = () => sortState.preview ? flash('정렬안 미리보기 중이다. 수락한 뒤에 저장해라.') : download(fileBase() + '.json', designJSON(), 'application/json');
+$('#bOpen').onclick = () => { if(!sortGuard()) $('#fileIn').click(); };
 $('#fileIn').onchange = async e => {
   const f = e.target.files[0]; if(!f) return;
   try{ loadDesign(JSON.parse(await f.text())); autosave(); }catch(err){ flash('열지 못했다: ' + err.message); }
   e.target.value = '';
 };
 $('#bNew').onclick = () => {
+  if(sortGuard()) return;
   if((S.parts.length || S.wires.length) && !confirm('지금 설계를 비우고 새로 시작할까? (저장 안 한 내용은 사라진다)')) return;
   const keep = S.settings;
   loadDesign({app:'jamsil-bb', meta:{title:''}, settings:keep, library:[], wires:[], parts:[], nextId:1}); autosave();
@@ -1787,6 +1809,7 @@ function setupSimUI(){
   $('#simReset').onclick = () => { simState.sw = {}; simState.volts = {}; simState.vcc = 5; simState.vneg = -5; saveSim(); renderItems(); };
   document.querySelector('.tab[data-tab="add"]').hidden = true;
   document.querySelector('.tab[data-tab="settings"]').hidden = true;
+  document.querySelector('.tab[data-tab="sort"]').hidden = true;
   document.querySelector('.tab[data-tab="check"]').firstChild.textContent = '경고';
   const st = document.createElement('style');
   st.textContent = '.lg{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px}.pg{cursor:pointer}';
@@ -1835,6 +1858,1070 @@ function openSimWindow(){
 }
 
 
+/* ================= 자동 정렬 (jamsil-bb-sort 이식, v1.4) =================
+   같은 회로를 금지 규칙(H1–H15)을 지키면서 다시 꽂고 다시 배선한다.
+   금지 규칙이 0순위이고, 금지를 지키는 안 중 점수가 가장 낮은 안을 고른다.
+   점수 = 100×선 수 + 총 길이 + 25×교차 + 40×부품 위 통과 + 기울기 벌점(3×min(|가로|,|세로|), 선당 최대 60) */
+const JamsilSort = (() => {
+  const COLS = 'ABCDEFGHIJ';
+  const COLX = [0, 1, 2, 3, 4, 7, 8, 9, 10, 11];
+  const W_WIRE = 100, W_LEN = 1, W_CROSS = 25, W_OVER = 40, W_SLOPE = 3, SLOPE_CAP = 60;
+  const SPAN = {resistor: [3, 5], led: [1, 3]}, SPAN_DEFAULT = [1, 5];
+  const SW_PITCH = 4, LED_PITCH = 2, GROUP_CAP = 4;
+  const SEP = '\u0001';
+  const tkey = (ref, i) => ref + SEP + i;
+  const isTerm = t => t.indexOf(SEP) >= 0;
+  const tsplit = t => { const k = t.lastIndexOf(SEP); return [t.slice(0, k), +t.slice(k + 1)]; };
+  const tname = t => isTerm(t) ? (([r, i]) => `${r}.${i + 1}`)(tsplit(t)) : t;
+  const slopePen = (a, b) => Math.min(SLOPE_CAP, W_SLOPE * Math.min(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1])));
+  const range = (a, b) => { const o = []; for (let i = a; i < b; i++) o.push(i); return o; };
+
+  /* ---------- 보드 기하 (편집기와 같은 좌표, 피치 단위) ---------- */
+  class Board {
+    constructor(settings){
+      this.R = settings.rows || 64;
+      this.splitV = settings.splitV !== false;
+      this.splitT = settings.splitT !== false;
+      this.posts = settings.posts;
+      this.vrows = [];
+      for (let r = 3; r + 4 <= this.R - 2; r += 6) for (let i = 0; i < 5; i++) this.vrows.push(r + i);
+      this.halfV = Math.floor(this.vrows.length / 2);
+      this.vkOfRow = new Map(this.vrows.map((row, k) => [row, k]));
+      const tspan = 59;
+      this.tpos = range(0, tspan).filter(i => i % 6 !== 5);
+      this.halfT = this.tpos.length / 2;
+      this.tfirst = 39 - (tspan - 1) / 2;
+      this._p = new Map(); this._xy = new Map(); this._g = new Map(); this._gh = new Map(); this._ex = new Map();
+    }
+    parse(h){
+      let c = this._p.get(h);
+      if (c !== undefined) return c;
+      let m;
+      if ((m = /^S(\d)([A-J])(\d+)$/.exec(h))) c = ['S', +m[1], COLS.indexOf(m[2]), +m[3]];
+      else if ((m = /^V(\d)([mp])(\d+)$/.exec(h))) c = ['V', +m[1], m[2], +m[3]];
+      else if ((m = /^T(\d)([mp])(\d+)$/.exec(h))) c = ['T', +m[1], m[2], +m[3]];
+      else if ((m = /^POST(\d)$/.exec(h))) c = ['POST', +m[1]];
+      else c = null;
+      this._p.set(h, c); return c;
+    }
+    exists(h){
+      let c = this._ex.get(h);
+      if (c !== undefined) return c;
+      const q = this.parse(h);
+      if (!q) c = false;
+      else if (q[0] === 'S') c = q[1] >= 1 && q[1] <= 4 && q[3] >= 1 && q[3] <= this.R;
+      else if (q[0] === 'V') c = q[1] >= 0 && q[1] <= 4 && q[3] >= 0 && q[3] < this.vrows.length;
+      else if (q[0] === 'T') c = q[1] >= 1 && q[1] <= 2 && q[3] >= 0 && q[3] < this.tpos.length;
+      else c = q[1] >= 0 && q[1] < this.posts.length;
+      this._ex.set(h, c); return c;
+    }
+    xy(h){
+      let c = this._xy.get(h);
+      if (c) return c;
+      const q = this.parse(h);
+      if (q[0] === 'S') c = [4.5 + (q[1] - 1) * 18 + 2 + COLX[q[2]], 12.2 + q[3]];
+      else if (q[0] === 'V') c = [1.5 + 18 * q[1] + (q[2] === 'm' ? 1 : 2), 12.2 + this.vrows[q[3]]];
+      else if (q[0] === 'T') { const y0 = 4.7 + (q[1] - 1) * 3.4; c = [this.tfirst + this.tpos[q[3]], y0 + (q[2] === 'p' ? 0.9 : 1.9)]; }
+      else c = [75.5 - (3.5 - q[1]) * 4.2, 2.7];
+      this._xy.set(h, c); return c;
+    }
+    group(h){
+      let c = this._g.get(h);
+      if (c) return c;
+      const q = this.parse(h);
+      if (q[0] === 'S') c = `S${q[1]}r${q[3]}${q[2] < 5 ? 'L' : 'R'}`;
+      else if (q[0] === 'V') c = `V${q[1]}${q[2]}` + (this.splitV ? (q[3] < this.halfV ? 'U' : 'D') : '');
+      else if (q[0] === 'T') c = `T${q[1]}${q[2]}` + (this.splitT ? (q[3] < this.halfT ? 'L' : 'R') : '');
+      else c = h;
+      this._g.set(h, c); return c;
+    }
+    groupHoles(g){
+      let c = this._gh.get(g);
+      if (c) return c;
+      let m;
+      if ((m = /^S(\d)r(\d+)([LR])$/.exec(g))) c = (m[3] === 'L' ? range(0, 5) : range(5, 10)).map(k => `S${m[1]}${COLS[k]}${m[2]}`);
+      else if ((m = /^V(\d)([mp])([UD]?)$/.exec(g))) {
+        let ks = range(0, this.vrows.length);
+        if (m[3] === 'U') ks = range(0, this.halfV);
+        if (m[3] === 'D') ks = range(this.halfV, this.vrows.length);
+        c = ks.map(k => `V${m[1]}${m[2]}${k}`);
+      } else if ((m = /^T(\d)([mp])([LR]?)$/.exec(g))) {
+        let ks = range(0, this.tpos.length);
+        if (m[3] === 'L') ks = range(0, this.halfT);
+        if (m[3] === 'R') ks = range(this.halfT, this.tpos.length);
+        c = ks.map(k => `T${m[1]}${m[2]}${k}`);
+      } else c = [g];
+      this._gh.set(g, c); return c;
+    }
+    segOfRailRow(p, sign, row){
+      const k = this.vkOfRow.get(row);
+      if (k === undefined) return null;
+      const h = `V${p}${sign}${k}`;
+      return [h, this.group(h)];
+    }
+    dist(a, b){ const p = this.xy(a), q = this.xy(b); return Math.hypot(p[0] - q[0], p[1] - q[1]); }
+  }
+  const railCol = g => g.slice(0, 3);
+
+  /* ---------- 게이트 교환표 ---------- */
+  function gateTable(d){
+    const names = d.pinNames || [];
+    const mk = (units, comm) => {
+      const out = [];
+      for (const u of units) if (u.every(n => names.includes(n))) out.push([u.map(n => names.indexOf(n)), comm]);
+      return out.length === units.length ? out : [];
+    };
+    const id = d.id, I = n => range(1, n + 1);
+    if (['7400', '7408', '7432', '7486', '7402'].includes(id)) return mk(I(4).map(i => [`${i}A`, `${i}B`, `${i}Y`]), [0, 1]);
+    if (id === '7404') return mk(I(6).map(i => [`${i}A`, `${i}Y`]), []);
+    if (['7410', '7411'].includes(id)) return mk(I(3).map(i => [`${i}A`, `${i}B`, `${i}C`, `${i}Y`]), [0, 1, 2]);
+    if (id === '7420') return mk(I(2).map(i => [`${i}A`, `${i}B`, `${i}C`, `${i}D`, `${i}Y`]), [0, 1, 2, 3]);
+    if (id === '74125') return mk(I(4).map(i => [`/${i}C`, `${i}A`, `${i}Y`]), []);
+    if (id === '74139') return mk(I(2).map(i => [`/${i}G`, `${i}A`, `${i}B`, `/${i}Y0`, `/${i}Y1`, `/${i}Y2`, `/${i}Y3`]), []);
+    return [];
+  }
+
+  /* ---------- 넷 ---------- */
+  function computeNets(B, design){
+    const parent = new Map();
+    const find = a => {
+      if (!parent.has(a)) parent.set(a, a);
+      while (parent.get(a) !== a) { const p = parent.get(parent.get(a)); parent.set(a, p); a = p; }
+      return a;
+    };
+    const uni = (a, b) => { parent.set(find(a), find(b)); };
+    for (const w of design.wires) uni(B.group(w.a), B.group(w.b));
+    const termNet = new Map();
+    for (const p of design.parts) p.pins.forEach((h, i) => termNet.set(tkey(p.ref, i), find(B.group(h))));
+    for (const w of design.wires) for (const h of [w.a, w.b]) if (h.startsWith('POST')) termNet.set(h, find(B.group(h)));
+    return {termNet, find};
+  }
+  function partition(termNet){
+    const by = new Map();
+    for (const [t, n] of termNet) { if (!by.has(n)) by.set(n, []); by.get(n).push(t); }
+    return by;
+  }
+
+  /* ---------- 기하 판정 ---------- */
+  function segIntersect(p1, p2, p3, p4){
+    if (Math.max(p1[0], p2[0]) < Math.min(p3[0], p4[0]) || Math.max(p3[0], p4[0]) < Math.min(p1[0], p2[0]) ||
+        Math.max(p1[1], p2[1]) < Math.min(p3[1], p4[1]) || Math.max(p3[1], p4[1]) < Math.min(p1[1], p2[1])) return false;
+    const ccw = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const d1 = ccw(p3, p4, p1), d2 = ccw(p3, p4, p2), d3 = ccw(p1, p2, p3), d4 = ccw(p1, p2, p4);
+    return ((d1 > 1e-9 && d2 < -1e-9) || (d1 < -1e-9 && d2 > 1e-9)) && ((d3 > 1e-9 && d4 < -1e-9) || (d3 < -1e-9 && d4 > 1e-9));
+  }
+  function segRect(p, q, r){
+    const [x0, y0, x1, y1] = r, dx = q[0] - p[0], dy = q[1] - p[1];
+    let t0 = 0, t1 = 1;
+    for (const [pp, qq] of [[-dx, p[0] - x0], [dx, x1 - p[0]], [-dy, p[1] - y0], [dy, y1 - p[1]]]) {
+      if (Math.abs(pp) < 1e-12) { if (qq < 0) return false; }
+      else {
+        const t = qq / pp;
+        if (pp < 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t);
+        if (t0 > t1) return false;
+      }
+    }
+    return t1 - t0 > 0.02;
+  }
+  const isSpdt = d => !!(d && d.sim && d.sim.type === 'spdt');
+  function bodyRect(B, pins, kind){
+    const xs = pins.map(h => B.xy(h)[0]), ys = pins.map(h => B.xy(h)[1]);
+    const a = Math.min(...xs), b = Math.max(...xs), c = Math.min(...ys), e = Math.max(...ys);
+    return kind === 'dip' ? [a + 0.4, c - 0.5, b - 0.4, e + 0.5] : [a - 0.7, c - 0.7, b + 0.7, e + 0.7];
+  }
+  function bodies(B, design, defs){
+    const out = [];
+    for (const p of design.parts) {
+      const d = defs(p.partId) || {};
+      if (d.kind === 'dip' && d.style !== 'dipsw') out.push(bodyRect(B, p.pins, 'dip'));
+      else if (isSpdt(d)) out.push(bodyRect(B, p.pins, 'sw'));
+    }
+    return out;
+  }
+
+  /* ---------- 점수 (어떤 설계든 같은 잣대) ---------- */
+  function scoreDesign(B, design, defs){
+    const segs = design.wires.map(w => [B.xy(w.a), B.xy(w.b)]);
+    let L = 0, X = 0, O = 0, D = 0, S = 0;
+    const bs = bodies(B, design, defs);
+    segs.forEach(([a, b], i) => {
+      L += Math.hypot(a[0] - b[0], a[1] - b[1]);
+      for (let j = i + 1; j < segs.length; j++) if (segIntersect(a, b, segs[j][0], segs[j][1])) X++;
+      for (const r of bs) if (segRect(a, b, r)) O++;
+      if (Math.abs(a[0] - b[0]) > 0.05 && Math.abs(a[1] - b[1]) > 0.05) D++;
+      S += slopePen(a, b);
+    });
+    const n = segs.length;
+    const nb = design.wires.filter(w => [w.a, w.b].every(h => /^(POST|T|V)/.test(h))).length;
+    const r1 = v => Math.round(v * 10) / 10;
+    return {wires: n, backbone: nb, circuit: n - nb, length: r1(L), cross: X, over: O, diag: D, slope: r1(S),
+            score: r1(W_WIRE * n + W_LEN * L + W_CROSS * X + W_OVER * O + S)};
+  }
+
+  /* ---------- 금지 규칙 검사기 (생성기와 따로 짠다) ---------- */
+  function checkRules(B, design, defs, ref, perm){
+    const bad = [];
+    const occ = new Map();
+    const addOcc = (h, who) => { if (!occ.has(h)) occ.set(h, []); occ.get(h).push(who); };
+    for (const p of design.parts) p.pins.forEach((h, i) => addOcc(h, `${p.ref}.${i + 1}`));
+    for (const w of design.wires) for (const h of [w.a, w.b]) if (!h.startsWith('POST')) addOcc(h, '선');
+    for (const h of occ.keys()) if (!B.exists(h)) bad.push(`H1 없는 구멍: ${h}`);
+    for (const [h, who] of occ) if (who.length > 1) bad.push(`H2 한 구멍에 ${who.length}개: ${h} (${who.join(', ')})`);
+    // H3
+    for (const p of design.parts) {
+      const d = defs(p.partId) || {};
+      if (!isSpdt(d)) continue;
+      const qs = p.pins.map(h => B.parse(h));
+      const ok = qs.every(q => q && q[0] === 'S') && new Set(qs.map(q => q[1] + ':' + q[2])).size === 1 && qs.length === 3 && qs.every((q, i) => q[3] === qs[0][3] + i);
+      if (!ok) { bad.push(`H3 ${p.ref} 스위치는 세로 3행 1열로 꽂는다`); continue; }
+      const s = qs[0][1], c = qs[0][2];
+      for (const q of qs) for (const dc of [-1, 1]) {
+        const nc = c + dc;
+        if (nc >= 0 && nc < 10 && Math.abs(COLX[nc] - COLX[c]) === 1) {
+          const h = `S${s}${COLS[nc]}${q[3]}`;
+          if (occ.get(h)) bad.push(`H3 ${p.ref} 핀 바로 옆 구멍을 썼다: ${h}`);
+        }
+      }
+    }
+    // H12
+    for (const w of design.wires) for (const [a, b] of [[w.a, w.b], [w.b, w.a]])
+      if (a.startsWith('POST') && !b.startsWith('T')) bad.push(`H12 포스트 선이 상단 버스를 거치지 않는다: ${a}-${b}`);
+    // H13
+    for (const w of design.wires) {
+      const qa = B.parse(w.a), qb = B.parse(w.b);
+      if (!qa || !qb) continue;
+      if (qa[0] === 'V' && qb[0] === 'V') {
+        const same = qa[1] === qb[1] && qa[2] === qb[2];
+        const other = B.splitV && ((qa[3] < B.halfV) !== (qb[3] < B.halfV));
+        if (!(same && other)) bad.push(`H13 세로 레일끼리 옆으로 이었다: ${w.a}-${w.b}`);
+      }
+    }
+    // H14
+    const {find: findn} = computeNets(B, design);
+    const roles = new Map();
+    B.posts.forEach((po, i) => {
+      if (['VCC', 'GND', 'IN', 'VNEG'].includes(po.role) && design.wires.some(w => w.a === `POST${i}` || w.b === `POST${i}`)) {
+        const n = findn(B.group(`POST${i}`));
+        if (!roles.has(n)) roles.set(n, new Set());
+        roles.get(n).add(po.role);
+      }
+    });
+    const fed = new Set();
+    for (const w of design.wires) {
+      const qa = B.parse(w.a), qb = B.parse(w.b);
+      for (const [x, y] of [[qa, qb], [qb, qa]]) if (x && y && x[0] === 'V' && y[0] === 'T') fed.add(x[1] + x[2]);
+    }
+    for (let pc = 0; pc < 5; pc++) for (const sign of ['m', 'p']) {
+      const hs = [`V${pc}${sign}0`].concat(B.splitV ? [`V${pc}${sign}${B.halfV}`] : []);
+      const rs = hs.map(h => roles.get(findn(B.group(h))) || new Set());
+      const name = `P${pc}${sign === 'm' ? '−' : '+'}`;
+      const miss = rs.map((r, k) => r.size ? null : (k === 0 ? '위' : '아래')).filter(Boolean);
+      if (miss.length) { bad.push(`H14 세로 레일 ${name}의 ${miss.join('·')} 반쪽이 전원에 연결되지 않았다`); continue; }
+      if (new Set(hs.map(h => findn(B.group(h)))).size !== 1) bad.push(`H14 세로 레일 ${name}의 위·아래 반쪽이 다른 넷이다`);
+      const want = sign === 'm' ? ['GND'] : ['VCC', 'IN', 'VNEG'];
+      if (rs.some(r => ![...r].some(x => want.includes(x)))) bad.push(`H14 세로 레일 ${name}의 넷 역할이 극성과 안 맞는다`);
+      if (!fed.has(pc + sign)) bad.push(`H14 세로 레일 ${name}이(가) 상단 버스에서 직접 받지 않는다`);
+    }
+    // H15
+    const legs = [];
+    for (const p of design.parts) for (const h of p.pins) { const q = B.parse(h); if (q && q[0] === 'S') legs.push([p.ref, q[1], q[2], q[3]]); }
+    for (const p of design.parts) {
+      const d = defs(p.partId) || {};
+      if (!(d.kind === 'dip' || isSpdt(d))) continue;
+      const qs = p.pins.map(h => B.parse(h));
+      if (!qs.every(q => q && q[0] === 'S')) continue;
+      const st = qs[0][1], r0 = Math.min(...qs.map(q => q[3])), r1 = Math.max(...qs.map(q => q[3]));
+      const xs = qs.map(q => COLX[q[2]]), x0 = Math.min(...xs) - 1, x1 = Math.max(...xs) + 1;
+      for (const [rf, s2, c2, r2] of legs)
+        if (rf !== p.ref && s2 === st && (r2 === r0 - 1 || r2 === r1 + 1) && COLX[c2] >= x0 && COLX[c2] <= x1)
+          bad.push(`H15 ${p.ref} 몸체 끝 바로 옆 행에 ${rf} 다리가 있다: S${s2}${COLS[c2]}${r2}`);
+    }
+    // H4
+    const gcnt = new Map();
+    for (const [h, who] of occ) if (h.startsWith('S')) gcnt.set(B.group(h), (gcnt.get(B.group(h)) || 0) + who.length);
+    for (const [g, c] of gcnt) if (c > GROUP_CAP) bad.push(`H4 한 줄 5구멍을 다 채웠다: ${g}`);
+    // H5
+    for (const p of design.parts) {
+      const d = defs(p.partId) || {};
+      if (d.kind !== 'two') continue;
+      const [lo, hi] = SPAN[d.style] || SPAN_DEFAULT;
+      const dd = B.dist(p.pins[0], p.pins[1]);
+      if (!(lo - 1e-6 <= dd && dd <= hi + 1e-6)) bad.push(`H5 ${p.ref} 다리 간격 ${dd.toFixed(2)}피치 (허용 ${lo}~${hi})`);
+      if (B.group(p.pins[0]) === B.group(p.pins[1])) bad.push(`H5 ${p.ref} 두 다리가 같은 줄(단락)`);
+    }
+    // H6
+    for (const p of design.parts) {
+      const d = defs(p.partId) || {};
+      if (d.kind !== 'dip') continue;
+      const qs = p.pins.map(h => B.parse(h));
+      const n = qs.length / 2, w = d.width || 3;
+      let ok = qs.every(q => q && q[0] === 'S') && new Set(qs.map(q => q[1])).size === 1;
+      if (ok) {
+        const r0 = qs[0][3], c0 = qs[0][2], rc = COLX.indexOf(COLX[c0] + w);
+        ok = c0 < 5 && qs.every((q, i) => i < n ? (q[2] === c0 && q[3] === r0 + i) : (q[2] === rc && q[3] === r0 + 2 * n - 1 - i));
+      }
+      if (!ok) bad.push(`H6 ${p.ref} DIP 배치가 규칙(노치 위, 홈 걸침)과 다르다`);
+    }
+    // H10, H11
+    const sws = design.parts.filter(p => isSpdt(defs(p.partId))).map(p => [p.ref, p.pins.map(h => B.xy(h))]);
+    for (let i = 0; i < sws.length; i++) for (let j = i + 1; j < sws.length; j++) {
+      const [a, pa] = sws[i], [b, pb] = sws[j];
+      if (Math.abs(pa[0][0] - pb[0][0]) < 2.5 && Math.abs(pa[1][1] - pb[1][1]) < SW_PITCH - 1e-6) bad.push(`H10 스위치 ${a}, ${b} 몸체가 겹친다`);
+    }
+    const leds = design.parts.filter(p => (defs(p.partId) || {}).style === 'led').map(p => [p.ref, p.pins.map(h => B.xy(h))]);
+    for (let i = 0; i < leds.length; i++) for (let j = i + 1; j < leds.length; j++) {
+      const [a, pa] = leds[i], [b, pb] = leds[j];
+      const ca = [(pa[0][0] + pa[1][0]) / 2, (pa[0][1] + pa[1][1]) / 2], cb = [(pb[0][0] + pb[1][0]) / 2, (pb[0][1] + pb[1][1]) / 2];
+      if (Math.hypot(ca[0] - cb[0], ca[1] - cb[1]) < LED_PITCH - 1e-6) bad.push(`H11 LED ${a}, ${b} 몸체가 겹친다`);
+    }
+    // H7, H8
+    if (ref) {
+      const t0 = computeNets(B, ref).termNet, n1 = computeNets(B, design), t1 = n1.termNet;
+      const P = perm || {};
+      const mapped = new Map();
+      for (const t of t0.keys()) {
+        if (isTerm(t)) { const [r, i] = tsplit(t); const m = P[r]; mapped.set(t, tkey(r, m && m[i] !== undefined ? m[i] : i)); }
+        else mapped.set(t, t);
+      }
+      const seen = new Map();
+      for (const [, ts] of partition(t0)) {
+        const news = new Set(ts.map(t => t1.has(mapped.get(t)) ? t1.get(mapped.get(t)) : null));
+        const lbl = ts.map(tname).slice(0, 3).join(', ');
+        if (news.has(null)) { bad.push(`H7 단자가 사라졌다: ${lbl}`); continue; }
+        if (news.size !== 1) { bad.push(`H7 원래 한 넷이 갈라졌다: ${lbl}`); continue; }
+        const nn = [...news][0];
+        if (seen.has(nn)) bad.push(`H7 서로 다른 넷이 붙었다: ${lbl} + ${seen.get(nn)}`);
+        seen.set(nn, lbl);
+      }
+      const all = new Set(mapped.values());
+      for (const t of t1.keys()) if (!all.has(t)) bad.push(`H7 원래 없던 단자 연결: ${tname(t)}`);
+      const termNets = new Set(t1.values());
+      for (const w of design.wires) if (!termNets.has(n1.find(B.group(w.a)))) bad.push(`H8 아무 단자에도 안 닿는 선: ${w.a}-${w.b}`);
+    }
+    return bad;
+  }
+
+  /* ---------- 회로 이해 ---------- */
+  class Circuit {
+    constructor(design, defs, B){
+      this.design = design; this.defs = defs; this.B = B;
+      this.parts = new Map(design.parts.map(p => [p.ref, p]));
+      if (this.parts.size !== design.parts.length) throw new Error('부품 기호(ref)가 겹친다. 기호를 서로 다르게 고쳐라.');
+      this.termNet = computeNets(B, design).termNet;
+      this.nets = partition(this.termNet);
+      this.supply = new Map();
+      for (const [t, n] of this.termNet) {
+        if (isTerm(t)) continue;
+        const role = (B.posts[+t.slice(4)] || {}).role;
+        if (['VCC', 'GND', 'IN', 'VNEG'].includes(role)) this.supply.set(n, role === 'IN' ? 'IN' + t.slice(4) : role);
+      }
+      this.postOf = new Map();
+      for (const [n, ts] of this.nets) this.postOf.set(n, ts.filter(t => !isTerm(t)));
+      this.ics = []; this.switches = []; this.twos = [];
+      const unsupported = [];
+      for (const [ref, p] of this.parts) {
+        const d = defs(p.partId);
+        if (!d) { unsupported.push(`${ref}(정의 없음)`); continue; }
+        if (d.kind === 'dip' && d.style !== 'dipsw' && d.style !== 'seg7') this.ics.push(ref);
+        else if (isSpdt(d)) this.switches.push(ref);
+        else if (d.kind === 'two') this.twos.push(ref);
+        else unsupported.push(`${ref}(${d.name || d.id})`);
+      }
+      if (unsupported.length) throw new Error('정렬이 아직 다루지 못하는 부품: ' + unsupported.join(', '));
+      if (![...this.supply.values()].includes('VCC') || ![...this.supply.values()].includes('GND'))
+        throw new Error('VCC와 GND 포스트가 회로에 연결돼 있어야 정렬할 수 있다.');
+      this.gates = new Map(this.ics.map(ref => [ref, gateTable(defs(this.parts.get(ref).partId))]));
+      this._units(); this._components();
+    }
+    net(ref, i){ return this.termNet.get(tkey(ref, i)); }
+    isSupply(n){ return this.supply.has(n); }
+    sign(n){ return this.supply.get(n) === 'GND' ? 'm' : 'p'; }
+    _units(){
+      const used = new Set(); this.units = [];
+      for (const ref of this.twos) {
+        if (used.has(ref)) continue;
+        const a = this.net(ref, 0), b = this.net(ref, 1);
+        let partner = null;
+        for (const [side, n] of [[0, a], [1, b]]) {
+          if (this.isSupply(n)) continue;
+          const others = this.nets.get(n).filter(t => t !== tkey(ref, side));
+          if (others.length === 1 && isTerm(others[0])) {
+            const [or, os] = tsplit(others[0]);
+            if (this.twos.includes(or) && !used.has(or) && or !== ref) {
+              const farSelf = side === 0 ? b : a, farO = this.net(or, 1 - os);
+              if (this.isSupply(farSelf) !== this.isSupply(farO)) partner = [side, or, os];
+            }
+          }
+        }
+        if (partner) {
+          const [side, or, os] = partner;
+          let u;
+          if (this.isSupply(this.net(ref, 1 - side))) u = {kind: 'chain', ps: ref, pm: or, ps_sup: 1 - side, ps_mid: side, pm_mid: os, pm_sig: 1 - os};
+          else u = {kind: 'chain', ps: or, pm: ref, ps_sup: 1 - os, ps_mid: os, pm_mid: side, pm_sig: 1 - side};
+          u.supply = this.net(u.ps, u.ps_sup);
+          this.units.push(u); used.add(ref); used.add(or); continue;
+        }
+        const sa = this.isSupply(a), sb = this.isSupply(b);
+        if (sa && sb) throw new Error(`정렬 미지원: ${ref}가 전원 넷 두 개 사이에 있다(디커플링 커패시터 등)`);
+        if (sa || sb) this.units.push({kind: 'single', ps: ref, ps_sup: sa ? 0 : 1, ps_sig: sa ? 1 : 0, supply: sa ? a : b});
+        else this.units.push({kind: 'bridge', pm: ref});
+        used.add(ref);
+      }
+    }
+    _components(){
+      const par = new Map();
+      const f = x => { if (!par.has(x)) par.set(x, x); while (par.get(x) !== x) { par.set(x, par.get(par.get(x))); x = par.get(x); } return x; };
+      for (const [ref, p] of this.parts) {
+        f('P' + ref);
+        p.pins.forEach((_, i) => {
+          const n = this.net(ref, i);
+          if (!this.isSupply(n) && this.nets.get(n).length > 1) par.set(f('P' + ref), f('N' + n));
+        });
+      }
+      const comp = ref => f('P' + ref);
+      const okey = ref => { const q = this.B.parse(this.parts.get(ref).pins[0]); return q && q[0] === 'S' ? [q[1], q[3], q[2]] : [9, 0, 0]; };
+      const cmp = (x, y) => { for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
+      const swb = new Map(), unb = new Map();
+      for (const ref of this.switches) { const c = comp(ref); if (!swb.has(c)) swb.set(c, []); swb.get(c).push(ref); }
+      for (const u of this.units) { const c = comp(u.ps || u.pm); if (!unb.has(c)) unb.set(c, []); unb.get(c).push(u); }
+      const ukey = u => okey(u.pm || u.ps);
+      this.swbanks = [...swb.values()].map(v => v.sort((a, b) => cmp(okey(a), okey(b)))).sort((a, b) => cmp(okey(a[0]), okey(b[0])));
+      this.unitbanks = [...unb.values()].map(v => v.sort((a, b) => cmp(ukey(a), ukey(b)))).sort((a, b) => cmp(ukey(a[0]), ukey(b[0])));
+    }
+  }
+
+  /* ---------- 배치 + 배선 ---------- */
+  class Layout {
+    constructor(C){ this.C = C; this.B = C.B; }
+    icH(ref){ return this.C.parts.get(ref).pins.length / 2; }
+    unitRows(r, bank){
+      const rows = [];
+      while (rows.length < bank.length) {
+        if (r > this.B.R) return null;
+        const needRail = bank[rows.length].kind !== 'bridge';
+        if ((!needRail || this.B.vkOfRow.has(r)) && (!rows.length || r - rows[rows.length - 1] >= LED_PITCH)) rows.push(r);
+        r++;
+      }
+      return rows;
+    }
+    bands(g){
+      const out = [];
+      for (const ref of this.C.ics) { const [s, r] = g.ic[ref]; out.push([s, r, r + this.icH(ref) - 1]); }
+      this.C.swbanks.forEach((bank, k) => { const [s, r] = g.sw[k]; out.push([s, r, r + SW_PITCH * (bank.length - 1) + 2]); });
+      for (let k = 0; k < this.C.unitbanks.length; k++) {
+        const rows = this.unitRows(g.un[k][1], this.C.unitbanks[k]);
+        if (!rows) return null;
+        out.push([g.un[k][0], rows[0], rows[rows.length - 1]]);
+      }
+      return out;
+    }
+    feasible(g){
+      const bs = this.bands(g);
+      if (!bs) return false;
+      for (const [s, r0, r1] of bs) if (!(s >= 1 && s <= 4 && r0 >= 1 && r1 <= this.B.R)) return false;
+      for (let s = 1; s <= 4; s++) {
+        const lst = bs.filter(b => b[0] === s).sort((a, b) => a[1] - b[1]);
+        for (let i = 1; i < lst.length; i++) if (lst[i][1] <= lst[i - 1][2] + 1) return false;   // H15: 띠 사이 1행 비움
+      }
+      return true;
+    }
+    permOf(g){
+      const P = {};
+      for (const ref of this.C.ics) {
+        const gt = this.C.gates.get(ref), m = {};
+        if (gt.length) {
+          const [slots, flips] = g.gs[ref];
+          gt.forEach(([pins, comm], j) => {
+            const tgt = gt[slots[j]][0];
+            const order = range(0, pins.length);
+            if (comm.length && flips[j]) {
+              const rot = flips[j] % comm.length;
+              comm.forEach((a, k) => { order[a] = comm[(k + rot) % comm.length]; });
+            }
+            pins.forEach((pi, k) => { m[pi] = tgt[order[k]]; });
+          });
+        }
+        P[ref] = m;
+      }
+      return P;
+    }
+    trowOf(n){
+      const role = this.C.supply.get(n);
+      if (role === 'VCC') return 'T1p';
+      if (role === 'GND') return 'T1m';
+      const ins = [...this.C.supply.values()].filter(r => r.startsWith('IN')).sort();
+      return ins.length && role === ins[0] ? 'T2p' : 'T2m';
+    }
+    build(g){
+      if (!this.feasible(g)) return null;
+      const B = this.B, C = this.C;
+      const parts = new Map(), occ = new Map(), blocked = new Set(), gcount = new Map();
+      const put = (h, who) => {
+        if (occ.has(h) || blocked.has(h) || !B.exists(h)) return false;
+        occ.set(h, who);
+        if (h[0] === 'S') { const gg = B.group(h), c = (gcount.get(gg) || 0) + 1; gcount.set(gg, c); if (c > GROUP_CAP) return false; }
+        return true;
+      };
+      const P = this.permOf(g);
+      for (const ref of C.ics) {
+        const [s, r] = g.ic[ref], h = this.icH(ref);
+        const phys = range(0, h).map(i => `S${s}E${r + i}`).concat(range(0, h).map(i => `S${s}F${r + h - 1 - i}`));
+        parts.set(ref, phys);
+        for (const hh of phys) if (!put(hh, ref)) return null;
+      }
+      for (let k = 0; k < C.swbanks.length; k++) {
+        const [s, r, half, col] = g.sw[k], c = (half === 'L' ? 0 : 5) + col;
+        for (let j = 0; j < C.swbanks[k].length; j++) {
+          const ref = C.swbanks[k][j], rr = r + SW_PITCH * j;
+          const pins = [0, 1, 2].map(i => `S${s}${COLS[c]}${rr + i}`);
+          parts.set(ref, pins);
+          for (const hh of pins) if (!put(hh, ref)) return null;
+          for (let i = 0; i < 3; i++) for (const dc of [-1, 1]) {
+            const nc = c + dc;
+            if (nc >= 0 && nc < 10 && Math.abs(COLX[nc] - COLX[c]) === 1) {
+              const hb = `S${s}${COLS[nc]}${rr + i}`;
+              if (occ.has(hb)) return null;
+              blocked.add(hb);
+            }
+          }
+        }
+      }
+      const segNet = new Map();
+      for (let k = 0; k < C.unitbanks.length; k++) {
+        const bank = C.unitbanks[k], [s, r] = g.un[k], rows = this.unitRows(r, bank);
+        for (let j = 0; j < bank.length; j++) {
+          const u = bank[j], a = rows[j];
+          if (u.kind === 'bridge') {
+            const pins = [`S${s}E${a}`, `S${s}F${a}`]; parts.set(u.pm, pins);
+            for (const hh of pins) if (!put(hh, u.pm)) return null;
+            continue;
+          }
+          const gnd = C.sign(u.supply) === 'm';
+          const rail = B.segOfRailRow(gnd ? s : s - 1, gnd ? 'm' : 'p', a);
+          if (!rail) return null;
+          const [rh, rg] = rail, ck = railCol(rg);
+          if (segNet.has(ck) && segNet.get(ck) !== u.supply) return null;
+          segNet.set(ck, u.supply);
+          const edge = gnd ? `S${s}J${a}` : `S${s}A${a}`;
+          if (u.kind === 'single') {
+            const pins = [null, null]; pins[u.ps_sup] = rh; pins[u.ps_sig] = edge; parts.set(u.ps, pins);
+            for (const hh of pins) if (!put(hh, u.ps)) return null;
+            continue;
+          }
+          const ps = [null, null]; ps[u.ps_sup] = rh; ps[u.ps_mid] = edge;
+          const pm = [null, null]; pm[u.pm_mid] = gnd ? `S${s}F${a}` : `S${s}E${a}`; pm[u.pm_sig] = gnd ? `S${s}E${a}` : `S${s}F${a}`;
+          parts.set(u.ps, ps); parts.set(u.pm, pm);
+          for (const [rf, pins] of [[u.ps, ps], [u.pm, pm]]) for (const hh of pins) if (!put(hh, rf)) return null;
+        }
+      }
+      for (const ref of C.twos) {
+        const d = C.defs(C.parts.get(ref).partId), [lo, hi] = SPAN[d.style] || SPAN_DEFAULT;
+        const pp = parts.get(ref), dd = B.dist(pp[0], pp[1]);
+        if (!(lo - 1e-6 <= dd && dd <= hi + 1e-6)) return null;
+      }
+      return this.route(parts, occ, blocked, gcount, segNet, P);
+    }
+    route(parts, occ, blocked, gcount, segNet, P){
+      const B = this.B, C = this.C;
+      const wires = [], segs = [];
+      const body = C.ics.map(ref => bodyRect(B, parts.get(ref), 'dip')).concat(C.switches.map(ref => bodyRect(B, parts.get(ref), 'sw')));
+      const free = g => {
+        if (g[0] === 'S' && (gcount.get(g) || 0) >= GROUP_CAP) return [];
+        return B.groupHoles(g).filter(h => !occ.has(h) && !blocked.has(h));
+      };
+      const cent = new Map();
+      const centroid = g => {
+        let c = cent.get(g);
+        if (!c) { const pts = B.groupHoles(g).map(h => B.xy(h)); c = [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length]; cent.set(g, c); }
+        return c;
+      };
+      const near = (hs, pt, k) => hs.map(h => [(B.xy(h)[0] - pt[0]) ** 2 + (B.xy(h)[1] - pt[1]) ** 2, h]).sort((a, b) => a[0] - b[0]).slice(0, k).map(x => x[1]);
+      const bestPair = (ga, gb) => {
+        let fa = free(ga), fb = free(gb);
+        if (!fa.length || !fb.length) return null;
+        if (fa.length > 4) fa = near(fa, centroid(gb), 4);
+        if (fb.length > 4) fb = near(fb, centroid(ga), 4);
+        let best = null;
+        for (const a of fa) {
+          const pa = B.xy(a);
+          for (const b of fb) {
+            const pb = B.xy(b);
+            let c = W_LEN * Math.hypot(pa[0] - pb[0], pa[1] - pb[1]) + slopePen(pa, pb);
+            if (best && c >= best[0]) continue;
+            for (const r of body) if (segRect(pa, pb, r)) c += W_OVER;
+            if (!best || c < best[0]) best = [c, a, b];
+          }
+        }
+        if (!best) return null;
+        const pa = B.xy(best[1]), pb = B.xy(best[2]);
+        let x = 0;
+        for (const sg of segs) if (segIntersect(pa, pb, sg[0], sg[1])) x++;
+        return [best[0] + W_CROSS * x, best[1], best[2]];
+      };
+      let total = 0;
+      const lay = (a, b, net, cost) => {
+        total += W_WIRE + cost;
+        for (const h of [a, b]) if (!h.startsWith('POST')) {
+          occ.set(h, 'wire');
+          if (h[0] === 'S') { const gg = B.group(h); gcount.set(gg, (gcount.get(gg) || 0) + 1); }
+        }
+        wires.push([a, b, net]); segs.push([B.xy(a), B.xy(b)]);
+      };
+      const connect = (groups, net) => {
+        groups = [...new Set(groups)];
+        if (groups.length < 2) return true;
+        const inT = [groups[0]], rest = new Set(groups.slice(1));
+        while (rest.size) {
+          let best = null;
+          for (const ga of inT) for (const gb of rest) {
+            const ca = centroid(ga), cb = centroid(gb), d = Math.hypot(ca[0] - cb[0], ca[1] - cb[1]);
+            if (!best || d < best[0]) best = [d, ga, gb];
+          }
+          const gb = best[2];
+          let bp = bestPair(best[1], gb);
+          if (!bp) {
+            for (const gx of inT) { const q = bestPair(gx, gb); if (q && (!bp || q[0] < bp[0])) bp = q; }
+            if (!bp) return false;
+          }
+          lay(bp[1], bp[2], net, bp[0]); inT.push(gb); rest.delete(gb);
+        }
+        return true;
+      };
+      const termHole = t => {
+        if (!isTerm(t)) return t;
+        const [ref, i] = tsplit(t), m = P[ref];
+        return parts.get(ref)[m && m[i] !== undefined ? m[i] : i];
+      };
+      // 1) 신호 넷
+      const netsSorted = [...C.nets.entries()].sort((a, b) => b[1].length - a[1].length);
+      for (const [n, ts] of netsSorted) {
+        if (C.isSupply(n)) continue;
+        const groups = ts.map(t => B.group(termHole(t)));
+        if (new Set(groups).size < 2) continue;
+        if (!connect(groups, n)) return null;
+      }
+      // 2) 전원 넷의 단자 -> 가까운 세로 레일 (레일 한 열에는 넷 하나)
+      const order = [...C.supply.keys()].sort((a, b) => {
+        const ka = (C.supply.get(a) === 'VCC') * 2 + (C.supply.get(a) === 'GND'), kb = (C.supply.get(b) === 'VCC') * 2 + (C.supply.get(b) === 'GND');
+        return ka - kb;
+      });
+      const halvesV = B.splitV ? ['U', 'D'] : [''];
+      for (const n of order) {
+        const sign = C.sign(n);
+        const tg = [];
+        for (const t of C.nets.get(n)) {
+          if (!isTerm(t)) continue;
+          const g = B.group(termHole(t));
+          if (g[0] === 'V' || g[0] === 'T') continue;
+          tg.push(g);
+        }
+        for (const g of new Set(tg)) {
+          const m = /^S(\d)r(\d+)([LR])$/.exec(g), s = +m[1], half = m[3];
+          const cg = centroid(g), pre = [], cands = [];
+          for (const p of [s - 1, s]) {
+            const ck = `V${p}${sign}`;
+            if (segNet.has(ck) && segNet.get(ck) !== n) continue;
+            const extra = ((p === s - 1) === (half === 'L')) ? 0 : 15;
+            for (const hv of halvesV) {
+              const rg = ck + hv, fr = free(rg);
+              if (!fr.length) continue;
+              const dmin = Math.sqrt(Math.min(...fr.map(h => (B.xy(h)[0] - cg[0]) ** 2 + (B.xy(h)[1] - cg[1]) ** 2)));
+              pre.push([dmin + extra, extra, rg]);
+            }
+          }
+          pre.sort((a, b) => a[0] - b[0]);
+          for (const [, extra, rg] of pre.slice(0, 2)) { const bp = bestPair(g, rg); if (bp) cands.push([bp[0] + extra, bp, rg]); }
+          if (!cands.length) return null;
+          cands.sort((a, b) => a[0] - b[0]);
+          const [, bp, rg] = cands[0];
+          segNet.set(railCol(rg), n);
+          lay(bp[1], bp[2], n, bp[0]);
+        }
+      }
+      // 3) 전원 기간망: 포스트 -> 상단 버스 -> 세로 레일 10열 전부
+      let vcc = null, gnd = null;
+      for (const [n, role] of C.supply) { if (role === 'VCC' && vcc === null) vcc = n; if (role === 'GND' && gnd === null) gnd = n; }
+      if (vcc === null || gnd === null) return null;
+      for (let p = 0; p < 5; p++) {
+        if (!segNet.has(`V${p}m`)) segNet.set(`V${p}m`, gnd);
+        if (!segNet.has(`V${p}p`)) segNet.set(`V${p}p`, vcc);
+        if (C.sign(segNet.get(`V${p}m`)) !== 'm' || C.sign(segNet.get(`V${p}p`)) !== 'p') return null;
+      }
+      const usedT = new Map();
+      for (let p = 0; p < 5; p++) for (const sign of ['m', 'p']) {
+        const ck = `V${p}${sign}`, n = segNet.get(ck), trow = this.trowOf(n);
+        const top = ck + (B.splitV ? 'U' : '');
+        let best = null;
+        for (const t of (B.splitT ? [trow + 'L', trow + 'R'] : [trow])) {
+          const bp = bestPair(t, top);
+          if (bp && (!best || bp[0] < best[0][0])) best = [bp, t];
+        }
+        if (!best) return null;
+        lay(best[0][1], best[0][2], n, best[0][0]);
+        if (!usedT.has(n)) usedT.set(n, new Set());
+        usedT.get(n).add(best[1]);
+        if (B.splitV) {
+          const bp = bestPair(ck + 'U', ck + 'D');
+          if (!bp) return null;
+          lay(bp[1], bp[2], n, bp[0]);
+        }
+      }
+      for (const [n, tset] of usedT) {
+        const posts = C.postOf.get(n) || [];
+        if (!posts.length) return null;
+        const ts = [...tset].sort();
+        let tn = null, td = Infinity;
+        for (const t of ts) {
+          const fr = free(t);
+          const d = fr.length ? Math.min(...fr.map(h => B.dist(posts[0], h))) : Infinity;
+          if (d < td) { td = d; tn = t; }
+        }
+        if (tn === null) return null;
+        let bp = bestPair(posts[0], tn);
+        if (!bp) return null;
+        lay(bp[1], bp[2], n, bp[0]);
+        for (const t of ts) if (t !== tn) {
+          bp = bestPair(tn, t);
+          if (!bp) return null;
+          lay(bp[1], bp[2], n, bp[0]);
+        }
+      }
+      return {parts, wires, P, score: total};
+    }
+    toDesign(res){
+      const C = this.C;
+      const palette = ['#f0b400', '#2f6fed', '#f07a1a', '#8b4fd8', '#f2f2f2', '#7a5a2f', '#e06fb0', '#22b8c4'];
+      const colors = new Map(); let k = 0;
+      for (const [, , n] of res.wires) {
+        if (colors.has(n)) continue;
+        const role = C.supply.get(n);
+        colors.set(n, role === 'VCC' ? '#d22f2f' : role === 'GND' ? '#222222' : role ? '#1f9d55' : palette[k++ % palette.length]);
+      }
+      let nid = 1;
+      const parts = C.design.parts.map(p => {
+        const d = C.defs(p.partId);
+        return Object.assign({}, p, {id: 'p' + (nid++), pins: res.parts.get(p.ref).slice(), orient: d.kind === 'dip' ? 'up' : d.kind === 'sip' ? 'v' : null});
+      });
+      const wires = res.wires.map(([a, b, n]) => ({id: 'w' + (nid++), a, b, color: colors.get(n)}));
+      return {parts, wires, nextId: nid};
+    }
+  }
+
+  /* ---------- 탐색 ---------- */
+  function rng(seed){
+    let s = (seed >>> 0) || 1;
+    const next = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    return {
+      random: next,
+      int: (a, b) => a + Math.floor(next() * (b - a + 1)),
+      choice: arr => arr[Math.floor(next() * arr.length)],
+      shuffle: arr => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(next() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; },
+      sample2: arr => { const i = Math.floor(next() * arr.length); let j = Math.floor(next() * (arr.length - 1)); if (j >= i) j++; return [arr[i], arr[j]]; }
+    };
+  }
+  const copyG = g => JSON.parse(JSON.stringify(g));
+  function randomGenome(L, R){
+    const C = L.C, B = L.B;
+    for (let tries = 0; tries < 4000; tries++) {
+      const g = {ic: {}, sw: [], un: [], gs: {}};
+      for (const ref of C.ics) {
+        g.ic[ref] = [R.int(1, 4), R.int(1, B.R - L.icH(ref) + 1)];
+        const gt = C.gates.get(ref);
+        if (gt.length) g.gs[ref] = [R.shuffle(range(0, gt.length)), gt.map(() => R.int(0, 3))];
+      }
+      for (const bank of C.swbanks) g.sw.push([R.int(1, 4), R.int(1, Math.max(1, B.R - SW_PITCH * bank.length)), R.choice(['L', 'R']), R.choice([0, 2, 4])]);
+      for (const bank of C.unitbanks) g.un.push([R.int(1, 4), R.int(3, Math.max(3, B.R - LED_PITCH * bank.length - 3))]);
+      if (L.feasible(g)) return g;
+    }
+    return null;
+  }
+  function genomeFromDesign(L, R){
+    const C = L.C, B = L.B, g = {ic: {}, sw: [], un: [], gs: {}};
+    for (const ref of C.ics) {
+      const q = B.parse(C.parts.get(ref).pins[0]);
+      g.ic[ref] = q && q[0] === 'S' && q[2] === 4 ? [q[1], q[3]] : [R.int(1, 4), R.int(1, 40)];
+      const gt = C.gates.get(ref);
+      if (gt.length) g.gs[ref] = [range(0, gt.length), gt.map(() => 0)];
+    }
+    for (const bank of C.swbanks) {
+      const q = B.parse(C.parts.get(bank[0]).pins[0]);
+      if (q && q[0] === 'S') { const c = q[2] % 5; const cc = [0, 2, 4].reduce((a, b) => Math.abs(b - c) < Math.abs(a - c) ? b : a); g.sw.push([q[1], q[3], q[2] < 5 ? 'L' : 'R', cc]); }
+      else g.sw.push([R.int(1, 4), R.int(1, 30), 'L', 2]);
+    }
+    for (const bank of C.unitbanks) {
+      const u = bank[0];
+      const hs = [u.pm, u.ps].filter(Boolean).flatMap(r => C.parts.get(r).pins).filter(h => h && h[0] === 'S');
+      const q = hs.length ? B.parse(hs[0]) : ['S', 4, 0, 30];
+      g.un.push([q[1], Math.max(3, q[3])]);
+    }
+    return g;
+  }
+  function mutate(g0, L, R){
+    const C = L.C, B = L.B, g = copyG(g0);
+    const k = R.choice(['ic', 'ic', 'swap', 'gate', 'gate', 'flip', 'sw', 'un', 'shift']);
+    const gsKeys = Object.keys(g.gs);
+    if (k === 'ic' && C.ics.length) {
+      const ref = R.choice(C.ics), [s, r] = g.ic[ref];
+      g.ic[ref] = R.random() < 0.5 ? [s, Math.max(1, Math.min(B.R - L.icH(ref) + 1, r + R.int(-4, 4)))] : [R.int(1, 4), R.int(1, B.R - L.icH(ref) + 1)];
+    } else if (k === 'swap' && C.ics.length > 1) {
+      const [a, b] = R.sample2(C.ics); [g.ic[a], g.ic[b]] = [g.ic[b], g.ic[a]];
+    } else if (k === 'gate' && gsKeys.length) {
+      const sl = g.gs[R.choice(gsKeys)][0];
+      if (sl.length > 1) { const [i, j] = R.sample2(range(0, sl.length)); [sl[i], sl[j]] = [sl[j], sl[i]]; }
+    } else if (k === 'flip' && gsKeys.length) {
+      const fl = g.gs[R.choice(gsKeys)][1]; fl[R.int(0, fl.length - 1)] = R.int(0, 3);
+    } else if (k === 'sw' && g.sw.length) {
+      const i = R.int(0, g.sw.length - 1), [s, r, half, col] = g.sw[i], c = R.random();
+      if (c < 0.3) g.sw[i] = [s, r, half, R.choice([0, 2, 4])];
+      else if (c < 0.5) g.sw[i] = [s, r, R.choice(['L', 'R']), col];
+      else if (c < 0.8) g.sw[i] = [s, Math.max(1, r + R.int(-4, 4)), half, col];
+      else g.sw[i] = [R.int(1, 4), r, half, col];
+    } else if (k === 'un' && g.un.length) {
+      const i = R.int(0, g.un.length - 1), [s, r] = g.un[i];
+      g.un[i] = R.random() < 0.3 ? [R.int(1, 4), r] : [s, Math.max(1, r + R.int(-4, 4))];
+    } else if (k === 'shift') {
+      const dr = R.int(-3, 3), s = R.int(1, 4);
+      for (const ref of C.ics) if (g.ic[ref][0] === s) g.ic[ref] = [s, g.ic[ref][1] + dr];
+      g.sw = g.sw.map(x => x[0] === s ? [x[0], x[1] + dr, x[2], x[3]] : x);
+      g.un = g.un.map(x => x[0] === s ? [x[0], x[1] + dr] : x);
+    }
+    return g;
+  }
+  const evaluate = (L, g) => L.build(g);
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const yieldNow = () => new Promise(r => setTimeout(r, 0));
+
+  /* 정렬 본체. opts: {seconds, seed, onProgress, shouldStop} -> 결과 또는 오류 */
+  async function run(design, defs, opts){
+    const B = new Board(design.settings);
+    const C = new Circuit(design, defs, B);
+    const L = new Layout(C);
+    const R = rng(opts.seed || 1);
+    const total = Math.max(3, opts.seconds || 30) * 1000;
+    const t0 = now(), tAnneal = t0 + total * 2 / 3, tEnd = t0 + total;
+    let slice = now(), tries = 0, best = null, phase = '탐색';
+    const tick = async () => {
+      if (now() - slice > 40) {
+        if (opts.onProgress) opts.onProgress({elapsed: (now() - t0) / 1000, total: total / 1000, tries, best: best ? best.score : null, phase});
+        await yieldNow(); slice = now();
+      }
+    };
+    const stop = () => opts.shouldStop && opts.shouldStop();
+    let first = true;
+    while (now() < tAnneal && !stop()) {
+      let g = null, cur = null;
+      for (let a = 0; a < 200 && !g && !stop(); a++) {
+        let g0 = first ? genomeFromDesign(L, R) : randomGenome(L, R);
+        if (first) {
+          for (let k = 0; k < 300; k++) { tries++; if (evaluate(L, g0)) break; g0 = mutate(g0, L, R); await tick(); }
+          first = false;
+        }
+        if (!g0) continue;
+        tries++;
+        const r0 = evaluate(L, g0);
+        if (r0) { g = g0; cur = r0; }
+        await tick();
+      }
+      if (!g) continue;
+      if (!best || cur.score < best.score) best = {score: cur.score, g, res: cur};
+      const runStart = now(), runEnd = Math.min(tAnneal, runStart + Math.max(10000, (tAnneal - t0) / 3));
+      while (now() < runEnd && !stop()) {
+        const frac = (now() - runStart) / Math.max(1, runEnd - runStart);
+        const T = 200 * Math.pow(0.005, frac);
+        const g2 = mutate(g, L, R); tries++;
+        const r2 = evaluate(L, g2);
+        if (r2 && (r2.score <= cur.score || R.random() < Math.exp((cur.score - r2.score) / T))) {
+          g = g2; cur = r2;
+          if (cur.score < best.score) best = {score: cur.score, g, res: cur};
+        }
+        await tick();
+      }
+    }
+    // 다듬기: 하나씩 모든 자리에 놓아 보고 나아지면 옮긴다
+    if (best && !stop()) {
+      phase = '다듬기';
+      let improved = true;
+      while (improved && now() < tEnd && !stop()) {
+        improved = false;
+        const cands = [];
+        for (const ref of C.ics) for (let s = 1; s <= 4; s++) for (let r = 1; r <= B.R - L.icH(ref) + 1; r++) cands.push(['ic', ref, [s, r]]);
+        for (let k = 0; k < C.swbanks.length; k++) for (let s = 1; s <= 4; s++) for (const half of ['L', 'R']) for (const col of [0, 2, 4]) for (let r = 1; r < B.R; r++) cands.push(['sw', k, [s, r, half, col]]);
+        for (let k = 0; k < C.unitbanks.length; k++) for (let s = 1; s <= 4; s++) for (let r = 3; r < B.R; r++) cands.push(['un', k, [s, r]]);
+        for (const ref of Object.keys(best.g.gs)) {
+          const n = best.g.gs[ref][0].length;
+          for (let i = 0; i < n; i++) { for (let j = i + 1; j < n; j++) cands.push(['gs', ref, [i, j]]); for (let f = 0; f < 4; f++) cands.push(['fl', ref, [i, f]]); }
+        }
+        for (const [kind, key, val] of cands) {
+          if (now() >= tEnd || stop()) break;
+          const g2 = copyG(best.g);
+          if (kind === 'ic') g2.ic[key] = val;
+          else if (kind === 'sw') g2.sw[key] = val;
+          else if (kind === 'un') g2.un[key] = val;
+          else if (kind === 'gs') { const sl = g2.gs[key][0]; [sl[val[0]], sl[val[1]]] = [sl[val[1]], sl[val[0]]]; }
+          else g2.gs[key][1][val[0]] = val[1];
+          if ((kind === 'ic' || kind === 'sw' || kind === 'un') && !L.feasible(g2)) continue;
+          tries++;
+          const r2 = evaluate(L, g2);
+          if (r2 && r2.score < best.score - 1e-6) { best = {score: r2.score, g: g2, res: r2}; improved = true; }
+          await tick();
+        }
+      }
+    }
+    if (opts.onProgress) opts.onProgress({elapsed: (now() - t0) / 1000, total: total / 1000, tries, best: best ? best.score : null, phase: '검사'});
+    if (!best) return {ok: false, error: '금지 규칙을 지키는 배치를 찾지 못했다. 시간을 늘리거나 부품 수를 확인해라.', tries};
+    const out = L.toDesign(best.res);
+    const cand = {settings: design.settings, parts: out.parts, wires: out.wires};
+    const bad = checkRules(B, cand, defs, design, best.res.P);
+    const remap = {};
+    for (const ref of C.ics) {
+      const names = defs(C.parts.get(ref).partId).pinNames || [];
+      const m = best.res.P[ref] || {};
+      const ch = Object.keys(m).map(Number).sort((a, b) => a - b).filter(i => m[i] !== i).map(i => `${names[i]}→${names[m[i]]}`);
+      if (ch.length) remap[ref] = ch.join(', ');
+    }
+    return {ok: bad.length === 0, error: bad.length ? '검사기가 금지 위반을 잡았다. 결과를 버린다: ' + bad.slice(0, 3).join(' / ') : null,
+            bad, tries, elapsed: (now() - t0) / 1000, design: out, perm: best.res.P, remap,
+            before: scoreDesign(B, design, defs), beforeBad: checkRules(B, design, defs), after: scoreDesign(B, cand, defs)};
+  }
+
+  return {Board, Circuit, Layout, checkRules, scoreDesign, computeNets, gateTable, run, rng, mutate, randomGenome, genomeFromDesign,
+          RULES: [
+            ['H1', '보드에 없는 구멍을 쓰지 않는다'],
+            ['H2', '한 구멍에는 다리나 선 하나만'],
+            ['H3', '스위치는 세로 3행 1열, 핀 바로 옆 구멍은 비운다 (O-X-핀-X-O)'],
+            ['H4', '5구멍 한 줄은 최대 4개까지만 채운다'],
+            ['H5', '다리 간격: 저항 3~5피치, LED 1~3피치, 그 밖 1~5피치'],
+            ['H6', 'IC는 노치를 위로, 가운데 홈을 걸친다'],
+            ['H7', '원래 회로와 연결이 같다 (게이트 재배치 반영)'],
+            ['H8', '허공에 뜬 선이 없다'],
+            ['H10', '스위치 몸체끼리 4행 이상 떨어진다'],
+            ['H11', 'LED 몸체끼리 2피치 이상 떨어진다'],
+            ['H12', '포스트 선은 상단 버스로만 간다'],
+            ['H13', '세로 레일은 상단 버스에서만 받는다 (같은 열 위·아래 잇기만 허용)'],
+            ['H14', '세로 레일 10열 전부 전원에 연결 (− 열 GND, + 열 VCC 또는 입력)'],
+            ['H15', 'IC·스위치 몸체 끝 바로 위·아래 행에 다른 부품 다리를 꽂지 않는다']
+          ]};
+})();
+
+/* ================= 자동 정렬 화면 (v1.4) ================= */
+let sortState = {running: false, stop: false, result: null, preview: false, orig: null, progress: null, error: null, accepted: null};
+function sortBusy(){ return sortState.running || !!sortState.result; }
+function sortGuard(){
+  if(SIM || !sortBusy()) return false;
+  flash(sortState.running ? '정렬 중이다. 끝나거나 멈출 때까지 기다려라.' : '정렬안이 대기 중이다. 정렬 탭에서 수락하거나 버려라.');
+  return true;
+}
+const sortClone = o => JSON.parse(JSON.stringify(o));
+function sortSetPreview(on){
+  if(!sortState.result) return;
+  if(on && !sortState.preview){
+    sortState.orig = {parts: S.parts, wires: S.wires, nextId: S.nextId};
+    const d = sortState.result.design;
+    S.parts = sortClone(d.parts); S.wires = sortClone(d.wires); S.nextId = d.nextId;
+    sortState.preview = true;
+  } else if(!on && sortState.preview){
+    S.parts = sortState.orig.parts; S.wires = sortState.orig.wires; S.nextId = sortState.orig.nextId;
+    sortState.orig = null; sortState.preview = false;
+  } else return;
+  selection = null; pending = null;
+  renderItems(); pushToSim(); renderSortPanel();
+}
+function sortDiscard(){
+  if(sortState.preview) sortSetPreview(false);
+  sortState.result = null; sortState.accepted = null;
+  renderItems(); renderSortPanel();
+}
+function sortAccept(){
+  const res = sortState.result;
+  if(!res) return;
+  if(sortState.preview) sortSetPreview(false);
+  sortState.result = null;
+  commit(() => {
+    S.parts = sortClone(res.design.parts); S.wires = sortClone(res.design.wires); S.nextId = res.design.nextId;
+    S.meta = Object.assign({}, S.meta, {sortInfo: {at: new Date().toISOString(), appVersion: APP_VERSION, before: res.before, after: res.after, remap: res.remap, perm: res.perm}});
+  });
+  sortState.accepted = {after: res.after, remap: res.remap};
+  renderSortPanel();
+}
+async function sortRun(){
+  if(SIM || sortState.running) return;
+  if(sortState.result) sortDiscard();
+  sortState.error = null; sortState.accepted = null;
+  if(!S.parts.length){ sortState.error = '판에 부품이 없다.'; renderSortPanel(); return; }
+  const secs = Math.max(5, Math.min(600, parseInt($('#srtTime').value, 10) || 60));
+  const seed = parseInt($('#srtSeed').value, 10) || 1;
+  $('#srtTime').value = secs;
+  const design = JSON.parse(designJSON());
+  sortState.running = true; sortState.stop = false; sortState.progress = {elapsed: 0, total: secs, tries: 0, best: null, phase: '준비'};
+  renderSortPanel();
+  let res;
+  try{
+    res = await JamsilSort.run(design, id => partDef(id), {seconds: secs, seed,
+      onProgress: p => { sortState.progress = p; renderSortProgress(); },
+      shouldStop: () => sortState.stop});
+  }catch(err){ res = {ok: false, error: err.message}; }
+  sortState.running = false;
+  if(res.ok){ sortState.result = res; sortSetPreview(true); }
+  else sortState.error = res.error || '정렬에 실패했다.';
+  renderSortPanel();
+}
+function renderSortProgress(){
+  const box = $('#srtProg'); if(!box || !sortState.progress) return;
+  const p = sortState.progress, pct = Math.min(100, 100 * p.elapsed / Math.max(1, p.total));
+  box.innerHTML = `<div class="srt-bar"><div style="width:${pct.toFixed(1)}%"></div></div>
+    <div class="muted" style="font-size:12px">${esc(p.phase)} · ${p.elapsed.toFixed(0)} / ${p.total.toFixed(0)}초 · 시도 ${p.tries.toLocaleString()}판 · 최고 점수 ${p.best === null ? '-' : p.best.toFixed(1)}</div>`;
+}
+function renderSortPanel(){
+  const box = $('#srtBody'); if(!box) return;
+  $('#srtRun').disabled = sortState.running;
+  $('#srtStop').hidden = !sortState.running;
+  if(sortState.running){ box.innerHTML = '<div id="srtProg"></div>'; renderSortProgress(); return; }
+  if(sortState.error){ box.innerHTML = `<div class="issue err">${esc(sortState.error)}</div>`; return; }
+  if(sortState.accepted){
+    box.innerHTML = `<div class="okbox"><b>정렬안을 수락했다.</b> 원래 판으로 돌아가려면 되돌리기(Ctrl+Z)를 누른다.</div>` + sortRemapHtml(sortState.accepted.remap);
+    return;
+  }
+  const r = sortState.result;
+  if(!r){ box.innerHTML = ''; return; }
+  const b = r.before, a = r.after;
+  const row = (name, x, y, fmt) => `<tr><td>${name}</td><td>${fmt ? fmt(x) : x}</td><td><b>${fmt ? fmt(y) : y}</b></td></tr>`;
+  const f1 = v => Number(v).toFixed(1);
+  box.innerHTML = `
+    <div class="okbox"><b>정렬안을 찾았다.</b> 금지 규칙 위반 0건 (검사기 통과). ${r.tries.toLocaleString()}판을 ${r.elapsed.toFixed(0)}초 동안 시도했다.</div>
+    <p class="muted" style="margin:8px 0 4px">${sortState.preview ? '지금 판에 정렬안이 보인다. 시뮬레이션 창이 열려 있으면 그쪽도 정렬안을 따라간다.' : '지금 판에는 원래 설계가 보인다.'}</p>
+    <div class="row">
+      <button class="btn" id="srtToggle">${sortState.preview ? '원래 판 보기' : '정렬안 보기'}</button>
+      <button class="btn primary" id="srtAccept">수락</button>
+      <button class="btn danger" id="srtDiscard">버리기</button>
+    </div>
+    <table class="pins srt-tbl" style="margin-top:8px"><tr><th>항목</th><th>원래</th><th>정렬안</th></tr>
+      ${row('금지 위반', r.beforeBad.length, 0)}
+      ${row('회로 선', b.circuit, a.circuit)}
+      ${row('기간망 선', b.backbone, a.backbone)}
+      ${row('선 합계', b.wires, a.wires)}
+      ${row('총 길이(피치)', b.length, a.length, f1)}
+      ${row('교차', b.cross, a.cross)}
+      ${row('부품 위 통과', b.over, a.over)}
+      ${row('대각선', b.diag, a.diag)}
+      ${row('기울기 벌점', b.slope, a.slope, f1)}
+      ${row('점수', b.score, a.score, f1)}
+    </table>
+    ${r.beforeBad.length ? `<details style="margin-top:6px"><summary class="muted">원래 판의 금지 위반 ${r.beforeBad.length}건 보기</summary>${r.beforeBad.map(x => `<div class="issue" style="cursor:default">${esc(x)}</div>`).join('')}</details>` : ''}
+    ${sortRemapHtml(r.remap)}`;
+  $('#srtToggle').onclick = () => sortSetPreview(!sortState.preview);
+  $('#srtAccept').onclick = sortAccept;
+  $('#srtDiscard').onclick = sortDiscard;
+}
+function sortRemapHtml(remap){
+  const ks = Object.keys(remap || {});
+  if(!ks.length) return '<p class="muted">IC 핀 재배치: 없음 (회로도 핀 그대로 꽂는다)</p>';
+  return `<h3>IC 핀 재배치 (회로도 핀 → 꽂는 핀)</h3><p class="muted" style="margin-top:0">같은 게이트끼리, 바꿔도 되는 입력끼리만 바꿨다. 꽂을 때는 정렬된 판을 기준으로 한다.</p>` +
+    ks.map(k => `<div style="margin:3px 0"><b>${esc(k)}</b> <span style="font-size:12px">${esc(remap[k])}</span></div>`).join('');
+}
+$('#srtRun').onclick = () => { sortRun(); };
+$('#srtStop').onclick = () => { sortState.stop = true; };
+$('#srtRules').innerHTML = JamsilSort.RULES.map(([k, v]) => `<div><b>${k}</b> ${esc(v)}</div>`).join('');
+
 /* ================= 시작 ================= */
 (function init(){
   if(SIM){
@@ -1850,7 +2937,8 @@ function openSimWindow(){
     requestAnimationFrame(() => fitZoom());
   }
   window.__bb = {get state(){ return S; }, get nodes(){ return nodes; }, holeName, runChecks: () => runChecks(false), nets: () => nets(),
-    get simRes(){ return simRes; }, get simState(){ return simState; }, simIssues: () => simIssues(), compileLogicText};
+    get simRes(){ return simRes; }, get simState(){ return simState; }, simIssues: () => simIssues(), compileLogicText,
+    sort: {run: () => sortRun(), get state(){ return sortState; }, accept: () => sortAccept(), discard: () => sortDiscard(), preview: on => sortSetPreview(on), lib: JamsilSort}};
 })();
 </script>
 </body>
