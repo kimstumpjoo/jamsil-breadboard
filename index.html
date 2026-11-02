@@ -95,7 +95,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;m
 <body>
 <div class="app" id="app">
 <header>
-  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.5.1</span></h1>
+  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.6</span></h1>
   <input class="title" id="title" placeholder="설계 이름 (예: 3주차 반가산기)">
   <span class="sp"></span>
   <button class="hbtn" id="bSim" style="background:#6b3fd1;border-color:#8a63e6">시뮬레이션 창 열기</button>
@@ -235,7 +235,7 @@ const M = 1.5 * P;                    // 여백
 const COLS = ['A','B','C','D','E','F','G','H','I','J'];
 const COLX = [0,1,2,3,4,7,8,9,10,11]; // 스트립 안 열 위치(피치 단위), E-F 사이 홈
 const WIRE_COLORS = ['#d22f2f','#222222','#f2f2f2','#2f6fed','#1f9d55','#f0b400','#f07a1a','#8b4fd8'];
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.6';
 const STORE_AUTO = 'jamsil-bb-autosave-v1';
 const STORE_LIB = 'jamsil-bb-library-v1';
 
@@ -1031,7 +1031,7 @@ function refreshInfo(){
       <div class="row"><label>값/메모</label><input type="text" id="eVal" value="${esc(p.value||'')}"></div>
       <table class="pins" style="margin-top:8px"><tr><th>핀</th><th>이름</th><th>위치</th><th>넷</th></tr>${rows}</table>
       ${d.vcc?`<p class="muted">전원 핀: VCC ${d.vcc}번 · GND ${d.gnd}번</p>`:''}
-      ${d.logicFn ? '<h3>동작 정의</h3><div class="muted">내장 규칙 (BCD→7세그, 7447 데이터시트 기준)</div>' : d.logic ? `<h3>동작 정의</h3><pre style="white-space:pre-wrap;background:#f6f7f9;border-radius:6px;padding:6px;font-size:11px;margin:0">${esc(d.logic)}</pre>` : (d.kind==='dip' && d.style!=='seg7' && d.style!=='dipsw' ? '<p class="muted">동작 정의 없음: 시뮬레이션에서 출력을 계산하지 않는다.</p>' : '')}
+      ${d.seqModel && SEQ_MODELS[d.seqModel] ? `<h3>동작 정의</h3><div class="muted">내장 순차 모델 (데이터시트 기준). ${esc(SEQ_MODELS[d.seqModel].desc)}</div>` : d.logicFn ? '<h3>동작 정의</h3><div class="muted">내장 규칙 (BCD→7세그, 7447 데이터시트 기준)</div>' : d.logic ? `<h3>동작 정의</h3><pre style="white-space:pre-wrap;background:#f6f7f9;border-radius:6px;padding:6px;font-size:11px;margin:0">${esc(d.logic)}</pre>` : (d.kind==='dip' && d.style!=='seg7' && d.style!=='dipsw' ? '<p class="muted">동작 정의 없음: 시뮬레이션에서 출력을 계산하지 않는다.</p>' : '')}
       <div style="margin-top:10px"><button class="btn danger" id="pdel">이 부품 삭제</button></div>`;
     $('#eRef').onchange = e => commit(() => { p.ref = e.target.value.trim() || p.ref; });
     $('#eVal').onchange = e => commit(() => { p.value = e.target.value.trim(); });
@@ -1337,6 +1337,10 @@ function simDeadInputs(){
   return out;
 }
 function saveSim(){ trySet(STORE_SIM, JSON.stringify(simState)); }
+/* v1.6 기억: 게이트 출력 값과 순차 소자 상태를 부품별로 남긴다. 부품 종류나 핀 위치가 바뀌면 그 부품 기억은 버린다. */
+function simMemGet(){ const m = simState.mem; return (m && typeof m === 'object') ? {outs: m.outs || {}, seq: m.seq || {}} : {outs:{}, seq:{}}; }
+const simPartSig = p => p.partId + '@' + p.pins.join(',');
+function simResetMemory(){ simState.mem = {outs:{}, seq:{}}; saveSim(); }
 let simRes = null;
 let simWin = null;
 
@@ -1369,14 +1373,90 @@ const LOGIC = {
   '74153': '1Y = !/1G & (B ? (A ? 1C3 : 1C2) : (A ? 1C1 : 1C0))\n2Y = !/2G & (B ? (A ? 2C3 : 2C2) : (A ? 2C1 : 2C0))',
   '74157': [1,2,3,4].map(i => `${i}Y = !/G & (S ? ${i}B : ${i}A)`).join('\n'),
   '74283': _add4,
-  '7474': '# 순차 소자: 1단계에서는 출력을 모름으로 둔다\n1Q = X\n/1Q = X\n2Q = X\n/2Q = X',
-  '74112': '# 순차 소자\n1Q = X\n/1Q = X\n2Q = X\n/2Q = X',
-  '74161': '# 순차 소자\nQA = X\nQB = X\nQC = X\nQD = X\nRCO = X',
-  '74163': '# 순차 소자\nQA = X\nQB = X\nQC = X\nQD = X\nRCO = X',
-  '74193': '# 순차 소자\nQA = X\nQB = X\nQC = X\nQD = X\n/CO = X\n/BO = X',
-  '74194': '# 순차 소자\nQA = X\nQB = X\nQC = X\nQD = X',
   'NE555': '# 시간 소자\nOUT = X'
 };
+
+/* ================= 순차 소자 모델 (v1.6) =================
+   값은 0, 1, 'X'(모름). 상태는 비트 배열 q. 제어 입력이 X면 가능한 결과를 모두 계산해서 같은 비트만 남긴다.
+   async(q, v): 레벨로 동작하는 입력(PRE·CLR·LOAD 등)을 반영한 상태.  fire(q, v, u): 해당 clock 에지에서의 다음 상태.
+   out(q, v): 출력 핀 값.  clocks: {pin, edge:'rise'|'fall', u} */
+const T3 = {
+  not: a => a==='X' ? 'X' : 1 - a,
+  and: (...xs) => xs.includes(0) ? 0 : xs.includes('X') ? 'X' : 1,
+  or: (...xs) => xs.includes(1) ? 1 : xs.includes('X') ? 'X' : 0,
+  merge: (a, b) => a===b ? a : 'X'
+};
+const mergeBits = (a, b) => a.map((x, k) => T3.merge(x, b[k]));
+const branch3 = (c, f1, f0) => c===1 ? f1() : c===0 ? f0() : mergeBits(f1(), f0());
+const pick3 = (c, a1, a0) => c===1 ? a1 : c===0 ? a0 : T3.merge(a1, a0);
+const bitsNum = q => q.reduce((n, b, k) => n + (b << k), 0);
+const numBits = (n, w) => Array.from({length:w}, (_, k) => (n >> k) & 1);
+const addBits = (q, d) => q.includes('X') ? q.map(() => 'X') : numBits((bitsNum(q) + d + 16) & 15, 4);
+// PRE·CLR (active low) 하나의 플립플롭: 둘 다 0이면 출력은 둘 다 1, 풀린 뒤 상태는 모름
+const presetClear = (x, pre, clr) => pick3(pre, pick3(clr, x, 0), pick3(clr, 1, 'X'));
+const pcActive = (pre, clr) => T3.not(T3.and(pre, clr));            // 1이면 비동기 입력이 걸려 있다
+const SEQ_MODELS = {
+  '7474': {
+    desc: '듀얼 D 플립플롭: CLK 상승 에지에서 Q←D. /PRE·/CLR은 clock과 상관없이 바로 적용(active low).',
+    outputs: ['1Q', '/1Q', '2Q', '/2Q'], inputs: ['/1CLR', '1D', '1CLK', '/1PRE', '/2PRE', '2CLK', '2D', '/2CLR'],
+    clocks: [{pin:'1CLK', edge:'rise', u:0}, {pin:'2CLK', edge:'rise', u:1}],
+    init: () => ['X', 'X'],
+    async: (q, v) => q.map((x, u) => presetClear(x, v(`/${u+1}PRE`), v(`/${u+1}CLR`))),
+    fire: (q, v, u) => { const r = q.slice(); r[u] = pick3(pcActive(v(`/${u+1}PRE`), v(`/${u+1}CLR`)), q[u], v(`${u+1}D`)); return r; },
+    out: (q, v) => { const o = {}; [0, 1].forEach(u => { const both = T3.and(T3.not(v(`/${u+1}PRE`)), T3.not(v(`/${u+1}CLR`)));
+      o[`${u+1}Q`] = pick3(both, 1, q[u]); o[`/${u+1}Q`] = pick3(both, 1, T3.not(q[u])); }); return o; }
+  },
+  '74112': {
+    desc: '듀얼 JK 플립플롭: CLK 하강 에지에서 J K = 00 유지, 01 리셋, 10 셋, 11 반전. /PRE·/CLR은 바로 적용(active low).',
+    outputs: ['1Q', '/1Q', '2Q', '/2Q'], inputs: ['1CLK', '1K', '1J', '/1PRE', '/2PRE', '2J', '2K', '2CLK', '/2CLR', '/1CLR'],
+    clocks: [{pin:'1CLK', edge:'fall', u:0}, {pin:'2CLK', edge:'fall', u:1}],
+    init: () => ['X', 'X'],
+    async: (q, v) => q.map((x, u) => presetClear(x, v(`/${u+1}PRE`), v(`/${u+1}CLR`))),
+    fire: (q, v, u) => { const r = q.slice(), x = q[u], j = v(`${u+1}J`), k = v(`${u+1}K`);
+      const nx = pick3(j, pick3(k, T3.not(x), 1), pick3(k, 0, x));
+      r[u] = pick3(pcActive(v(`/${u+1}PRE`), v(`/${u+1}CLR`)), x, nx); return r; },
+    out: (q, v) => SEQ_MODELS['7474'].out(q, v)
+  },
+  '74161': {
+    desc: '4비트 동기 카운터: /CLR=0이면 바로 0(비동기). CLK 상승 에지에서 /LOAD=0이면 A~D 적재, ENP=ENT=1이면 +1. RCO = ENT·(1111).',
+    outputs: ['QA', 'QB', 'QC', 'QD', 'RCO'], inputs: ['/CLR', 'CLK', 'A', 'B', 'C', 'D', 'ENP', '/LOAD', 'ENT'],
+    clocks: [{pin:'CLK', edge:'rise', u:0}],
+    init: () => ['X', 'X', 'X', 'X'],
+    async: (q, v) => branch3(v('/CLR'), () => q, () => [0, 0, 0, 0]),
+    fire: (q, v) => branch3(v('/CLR'), () => branch3(v('/LOAD'), () => branch3(T3.and(v('ENP'), v('ENT')), () => addBits(q, 1), () => q), () => ['A', 'B', 'C', 'D'].map(v)), () => q),
+    out: (q, v) => ({QA:q[0], QB:q[1], QC:q[2], QD:q[3], RCO:T3.and(v('ENT'), ...q)})
+  },
+  '74163': {
+    desc: '4비트 동기 카운터(동기 CLR): CLK 상승 에지에서 /CLR=0이면 0, /LOAD=0이면 A~D 적재, ENP=ENT=1이면 +1. RCO = ENT·(1111).',
+    outputs: ['QA', 'QB', 'QC', 'QD', 'RCO'], inputs: ['/CLR', 'CLK', 'A', 'B', 'C', 'D', 'ENP', '/LOAD', 'ENT'],
+    clocks: [{pin:'CLK', edge:'rise', u:0}],
+    init: () => ['X', 'X', 'X', 'X'],
+    async: q => q,
+    fire: (q, v) => branch3(v('/CLR'), () => branch3(v('/LOAD'), () => branch3(T3.and(v('ENP'), v('ENT')), () => addBits(q, 1), () => q), () => ['A', 'B', 'C', 'D'].map(v)), () => [0, 0, 0, 0]),
+    out: (q, v) => ({QA:q[0], QB:q[1], QC:q[2], QD:q[3], RCO:T3.and(v('ENT'), ...q)})
+  },
+  '74193': {
+    desc: '4비트 업/다운 카운터: CLR=1이면 0, /LOAD=0이면 A~D 적재(둘 다 비동기). DOWN=1일 때 UP 상승 에지에서 +1, UP=1일 때 DOWN 상승 에지에서 −1. /CO는 1111에서 UP=0일 때 0, /BO는 0000에서 DOWN=0일 때 0.',
+    outputs: ['QA', 'QB', 'QC', 'QD', '/CO', '/BO'], inputs: ['B', 'DOWN', 'UP', 'D', 'C', '/LOAD', 'CLR', 'A'],
+    clocks: [{pin:'UP', edge:'rise', u:1}, {pin:'DOWN', edge:'rise', u:-1}],
+    init: () => ['X', 'X', 'X', 'X'],
+    async: (q, v) => branch3(v('CLR'), () => [0, 0, 0, 0], () => branch3(v('/LOAD'), () => q, () => ['A', 'B', 'C', 'D'].map(v))),
+    fire: (q, v, u) => branch3(T3.and(T3.not(v('CLR')), v('/LOAD'), v(u > 0 ? 'DOWN' : 'UP')), () => addBits(q, u), () => q),
+    out: (q, v) => ({QA:q[0], QB:q[1], QC:q[2], QD:q[3], '/CO':T3.not(T3.and(T3.not(v('UP')), ...q)), '/BO':T3.not(T3.and(T3.not(v('DOWN')), ...q.map(T3.not)))})
+  },
+  '74194': {
+    desc: '4비트 양방향 시프트 레지스터: /CLR=0이면 바로 0. CLK 상승 에지에서 S1 S0 = 00 유지, 01 오른쪽(QA←SR), 10 왼쪽(QD←SL), 11 A~D 적재.',
+    outputs: ['QA', 'QB', 'QC', 'QD'], inputs: ['/CLR', 'SR', 'A', 'B', 'C', 'D', 'SL', 'S0', 'S1'],
+    clocks: [{pin:'CLK', edge:'rise', u:0}],
+    init: () => ['X', 'X', 'X', 'X'],
+    async: (q, v) => branch3(v('/CLR'), () => q, () => [0, 0, 0, 0]),
+    fire: (q, v) => branch3(v('/CLR'), () => branch3(v('S1'),
+        () => branch3(v('S0'), () => ['A', 'B', 'C', 'D'].map(v), () => [q[1], q[2], q[3], v('SL')]),
+        () => branch3(v('S0'), () => [v('SR'), q[0], q[1], q[2]], () => q)), () => q),
+    out: q => ({QA:q[0], QB:q[1], QC:q[2], QD:q[3]})
+  }
+};
+SEQ_MODELS['74194'].inputs.push('CLK');
 const SEG_PAT = ['abcdef','bc','abdeg','abcdg','bcfg','acdfg','cdefg','abc','abcdefg','abcfg','deg','cdg','bfg','adfg','defg',''];
 const LOGIC_FN = {
   '7447': { inputs:['A','B','C','D','/LT','/BI','/RBI'], outputs:['a','b','c','d','e','f','g'], fn: v => {
@@ -1395,7 +1475,7 @@ const LOGIC_FN = {
     return out;
   }}
 };
-BUILTIN.forEach(b => { if(LOGIC[b.id]) b.logic = LOGIC[b.id]; if(LOGIC_FN[b.id]) b.logicFn = b.id; });
+BUILTIN.forEach(b => { if(LOGIC[b.id]) b.logic = LOGIC[b.id]; if(LOGIC_FN[b.id]) b.logicFn = b.id; if(SEQ_MODELS[b.id]) b.seqModel = b.id; });
 BUILTIN.find(b => b.id==='SPDT').sim = {type:'spdt'};
 BUILTIN.find(b => b.id==='BTN').sim = {type:'button'};
 BUILTIN.push(
@@ -1506,6 +1586,14 @@ function pinRoles(d){
 }
 function compiled(def){
   if(!def) return null;
+  if(def.seqModel && SEQ_MODELS[def.seqModel]){
+    const key = 'seq|' + def.seqModel + '|' + def.pinNames.join(',');
+    if(_compCache.has(key)) return _compCache.get(key);
+    const M = SEQ_MODELS[def.seqModel], idx = n => def.pinNames.indexOf(n);
+    const ins = M.inputs.map(idx).filter(i => i >= 0);
+    const c = {seq:M, idx, inputs:ins, outputs:M.outputs.map(n => ({i:idx(n), name:n, deps:ins}))};
+    _compCache.set(key, c); return c;
+  }
   if(def.logicFn && LOGIC_FN[def.logicFn]){
     const F = LOGIC_FN[def.logicFn];
     const idx = n => def.pinNames.indexOf(n);
@@ -1579,6 +1667,13 @@ function simulate(){
     if(d.kind==='dip' && d.style!=='seg7' && d.style!=='dipsw') R.nologic.push(p);
   });
   let outs = new Map(logicParts.map(lp => [lp.p.id, lp.c.outputs.map(o => ({i:o.i, v:'X'}))]));
+  const seqParts = logicParts.filter(lp => lp.c.seq);
+  const mem = simMemGet();
+  const seqSt = new Map(seqParts.map(lp => {
+    const m = mem.seq[lp.p.id], n0 = lp.c.seq.init().length;
+    const ok = m && m.sig === simPartSig(lp.p) && Array.isArray(m.q) && m.q.length === n0;
+    return [lp.p.id, {q: ok ? m.q.slice() : lp.c.seq.init(), prev: ok && m.prev ? Object.assign({}, m.prev) : {}}];
+  }));
   const resolve = () => {
     const drv = new Map(); const add = (n,v,src,supply) => { if(!drv.has(n)) drv.set(n, []); drv.get(n).push({v, src, supply:!!supply}); };
     fixed.forEach(f => add(f.n, f.v, f.src, true));
@@ -1610,7 +1705,18 @@ function simulate(){
     const powered = !(d.vcc && d.gnd) || (pv(d.vcc-1)===1 && pv(d.gnd-1)===0);
     if(!powered) return c.outputs.map(o => ({i:o.i, v:'X'}));
     const get = i => { const v = pv(i); return v==='Z' ? (family==='LS' ? 1 : 'X') : v; };
+    if(c.seq){
+      const s = seqSt.get(p.id), v = n => { const i = c.idx(n); return i < 0 ? 'X' : get(i); };
+      const o = c.seq.out(c.seq.async(s.q, v), v);
+      return c.outputs.map(x => ({i:x.i, v: o[x.name]===undefined ? 'X' : o[x.name]}));
+    }
     return evalLogic(c, d, get);
+  };
+  // 순차 소자 입력 읽기 (전원이 없으면 null)
+  const seqView = ({p, d, c}, st) => {
+    const pv = i => { const v = st.val.get(net(p.pins[i])); return v===undefined ? 'Z' : v; };
+    if(d.vcc && d.gnd && !(pv(d.vcc-1)===1 && pv(d.gnd-1)===0)) return null;
+    return n => { const i = c.idx(n); if(i < 0) return 'X'; const v = pv(i); return v==='Z' ? (family==='LS' ? 1 : 'X') : v; };
   };
   // 출력 하나씩 차례로 갱신한다(동시 갱신이 만드는 가짜 발진을 막는다)
   const sweep = changedParts => {
@@ -1634,12 +1740,46 @@ function simulate(){
   const probe = runFrom(0);
   const toggling = new Set();
   if(!probe.stable){ sweep(toggling); sweep(toggling); }
-  // 2) 본 계산: 모름(X)에서 출발. 입력만으로 정해지는 값만 확정된다
-  const main = runFrom('X');
+  // 2) 본 계산 (v1.6): 직전 상태(기억)에서 출발해 안정될 때까지 돈다. 안정되면 순차 소자의 비동기 입력과 clock 에지를 반영하고 다시 돈다.
+  const runMem = () => {
+    outs = new Map(logicParts.map(lp => { const m = mem.outs[lp.p.id], okm = m && m.sig === simPartSig(lp.p) && Array.isArray(m.v) && m.v.length === lp.c.outputs.length;
+      return [lp.p.id, lp.c.outputs.map((o, k) => ({i:o.i, v: okm ? m.v[k] : 'X'}))]; }));
+    let it = 0, rounds = 0, stable = true;
+    for(;;){
+      let k = 0; while(k < 100 && sweep()) k++; it += k;
+      if(k >= 100){ stable = false; break; }
+      const st0 = resolve(), next = [];
+      for(const lp of seqParts){                       // 같은 순간의 값으로 모든 순차 소자를 동시에 판정한다
+        const M = lp.c.seq, s = seqSt.get(lp.p.id), v = seqView(lp, st0);
+        if(!v){ next.push([lp.p.id, M.init(), {}]); continue; }   // 전원이 없으면 상태를 잃는다
+        let q = M.async(s.q, v); const prev = {};
+        for(const ck of M.clocks){
+          const now = v(ck.pin), pr = s.prev[ck.pin]; prev[ck.pin] = now;
+          if(pr === undefined || pr === now) continue;
+          const [a, b] = ck.edge === 'rise' ? [0, 1] : [1, 0];
+          const sure = pr === a && now === b, maybe = !sure && (pr === a || pr === 'X') && (now === b || now === 'X');
+          if(sure) q = M.fire(q, v, ck.u); else if(maybe) q = mergeBits(q, M.fire(q, v, ck.u));
+        }
+        next.push([lp.p.id, q, prev]);
+      }
+      let moved = false;
+      for(const [id, q, prev] of next){ const s = seqSt.get(id); if(q.some((x, j) => x !== s.q[j])) moved = true; s.q = q; s.prev = prev; }
+      if(!moved || ++rounds > 40) break;               // 상태가 바뀌었으면(리플 카운터처럼 다음 소자의 clock이 될 수 있다) 다시 돈다
+    }
+    return {st:resolve(), it, stable, outs};
+  };
+  let main = runMem();
+  if(!main.stable){ main = runFrom('X'); }              // 기억에서 출발해 발진하면 기억 없이 계산한 값을 쓴다
   outs = main.outs; const st = main.st;
   R.unstable = logicParts.filter(lp => toggling.has(lp.p.id)).map(lp => lp.p);
-  if(probe.stable) logicParts.forEach(lp => { const a = main.outs.get(lp.p.id), b = probe.outs.get(lp.p.id); if(a.some((o,k) => o.v==='X' && b[k].v!=='X')) R.stateDep.push(lp.p); });
+  if(probe.stable) logicParts.forEach(lp => { if(lp.c.seq) return; const a = main.outs.get(lp.p.id), b = probe.outs.get(lp.p.id); if(a.some((o,k) => o.v==='X' && b[k].v!=='X')) R.stateDep.push(lp.p); });
+  R.seqUnknown = seqParts.filter(lp => seqView(lp, st) && main.outs.get(lp.p.id).some(o => o.v === 'X')).map(lp => lp.p);
   R.val = st.val; R.weak = st.weak; R.conf = st.conf; R.drv = st.drv; R.iter = main.it; R.stable = probe.stable && main.stable;
+  // 기억 저장 (바뀐 때만)
+  { const nm = {outs:Object.assign({}, mem.outs), seq:Object.assign({}, mem.seq)};   // 지금 판에 없는 부품의 기억은 남겨 둔다(창을 막 열어 판이 아직 안 왔을 때 지워지지 않게)
+    logicParts.forEach(lp => { nm.outs[lp.p.id] = {sig: simPartSig(lp.p), v: main.outs.get(lp.p.id).map(o => o.v)}; });
+    seqParts.forEach(lp => { const s = seqSt.get(lp.p.id); nm.seq[lp.p.id] = {sig: simPartSig(lp.p), q: s.q, prev: s.prev}; });
+    const js = JSON.stringify(nm); if(js !== JSON.stringify(simState.mem || null)){ simState.mem = nm; saveSim(); } }
   // 읽는 쪽, 전원, 떠 있는 입력 (실제로 쓰이는 출력에 관여하는 입력만 경고)
   const conn = new Map(); const bump = n => conn.set(n, (conn.get(n)||0) + 1);
   S.parts.forEach(p => p.pins.forEach(h => bump(net(h))));
@@ -1684,6 +1824,19 @@ function simulate(){
   simRes = R;
   return R;
 }
+/* 구형파 입력 (v1.6): 입력 포스트를 0V ↔ VCC로 일정 주기마다 뒤집는다. 창을 닫으면 멈춘다(저장 안 함). */
+const simAuto = new Map();
+function simAutoHz(i){ const f = simState.autoHz && simState.autoHz[i]; return typeof f === 'number' && isFinite(f) ? f : 0.5; }
+function simAutoStart(i){
+  if(simAuto.has(i)) return;
+  const half = Math.max(100, 500 / simAutoHz(i));
+  simAuto.set(i, setInterval(() => {
+    const T = THRESH[simState.family] || THRESH.LS;
+    simState.volts[i] = postVolt(i) >= T.vih ? 0 : simState.vcc; saveSim(); renderItems();
+  }, half));
+}
+function simAutoStop(i){ if(simAuto.has(i)){ clearInterval(simAuto.get(i)); simAuto.delete(i); } }
+function simAutoStopAll(){ [...simAuto.keys()].forEach(simAutoStop); }
 function simValOfHole(h){
   if(!simRes) return undefined;
   return simRes.val.get(nets().netOfHole(h));
@@ -1781,7 +1934,7 @@ function simClick(e){
   }
   if(hoverId && hoverId.startsWith('POST')){
     const i = +hoverId.slice(4);
-    if(S.settings.posts[i] && S.settings.posts[i].role==='IN'){ simState.volts[i] = postVolt(i) >= (THRESH[simState.family]||THRESH.LS).vih ? 0 : simState.vcc; saveSim(); renderItems(); return; }
+    if(S.settings.posts[i] && S.settings.posts[i].role==='IN'){ simAutoStop(i); simState.volts[i] = postVolt(i) >= (THRESH[simState.family]||THRESH.LS).vih ? 0 : simState.vcc; saveSim(); renderItems(); return; }
   }
   if(hoverId){ selection = {type:'net', id:nets().netOfHole(hoverId), hole:hoverId}; refreshHighlights(); refreshInfo(); return; }
   selection = null; renderItems();
@@ -1848,7 +2001,8 @@ function simIssues(){
   R.unpowered.forEach(u => push('err', `${u.p.ref}(${u.d.name}) 전원이 없다. VCC ${u.d.vcc}번=${u.vcc===undefined?'Z':u.vcc}, GND ${u.d.gnd}번=${u.gnd===undefined?'Z':u.gnd}. 출력은 모름(X)으로 둔다.`, u.p.pins[u.d.vcc-1]));
   R.ledNoRes.forEach(p => push('err', `${p.ref}: 직렬 저항 없이 켜진다. 실물에서는 과전류로 LED나 IC가 상할 수 있다.`, p.pins[0]));
   R.unstable.forEach(p => { const d = partDef(p.partId); push('warn', `${p.ref}(${d?d.name:''}) 출력이 끝없이 뒤집힌다(발진 루프). 정지 상태 시뮬레이션으로는 값을 정할 수 없어 X로 둔다.`, p.pins[0]); });
-  R.stateDep.forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''}) 피드백 때문에 출력이 이전 상태에 따라 달라진다(래치 유지 상태). 1단계에서는 모름(X)으로 둔다. 입력으로 세트/리셋하면 값이 정해진다.`, p.pins[0]); });
+  R.stateDep.forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''}) 피드백(래치) 출력이 아직 한 번도 정해지지 않아 모름(X)이다. 셋/리셋하거나 clock 에지를 주면 정해지고, 그 뒤로는 값을 기억한다.`, p.pins[0]); });
+  (R.seqUnknown||[]).forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''}) 상태가 아직 정해지지 않아 출력이 모름(X)이다. CLR·PRE·LOAD를 걸거나, 입력을 정한 뒤 clock 에지를 주면 정해진다.`, p.pins[0]); });
   R.badlogic.forEach(b => push('warn', `${b.p.ref}(${b.d.name}) 동작 정의 오류: ${b.err}`, b.p.pins[0]));
   R.floating.forEach(f => push('warn', `${f.p.ref}(${f.d.name}) ${f.i+1}번 ${f.d.pinNames[f.i]} 입력이 떠 있다. ${simState.family==='LS' ? 'LS 기준 1로 계산했다. 실물에서는 불안정할 수 있다.' : 'HC 기준 값을 모른다(X).'}`, f.p.pins[f.i]));
   (R.analog||[]).forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''})는 아날로그 소자라 논리 시뮬레이션에서 출력을 모름(X)으로 둔다. 증폭·필터 동작은 계산하지 않는다.`, p.pins[0]); });
@@ -1884,12 +2038,15 @@ function renderSimPanel(){
       if(po.role==='VNEG') return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">V− (음전원)</span></span><input type="number" step="0.5" min="-20" max="0" value="${simState.vneg}" data-vneg style="width:70px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"> V</div>`;
       if(po.role==='IN'){ const v = postVolt(i), lv = voltToLogic(v);
         return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">입력</span> <b style="color:${lv===1?'#d22f2f':lv===0?'#2f6fed':'#a24be0'}">→ ${lv}</b></span><input type="number" step="0.1" min="-1" max="12" value="${v}" data-pv="${i}" style="width:62px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"> V</div>
-          <div class="row" style="margin-left:18px"><button class="btn sm" data-pset="${i}" data-v="0">0V</button><button class="btn sm" data-pset="${i}" data-v="vcc">${simState.vcc.toFixed(1)}V</button><span class="muted" style="font-size:11px">0 ≤ ${T.vil}V · 1 ≥ ${T.vih}V</span></div>` +
+          <div class="row" style="margin-left:18px"><button class="btn sm" data-pset="${i}" data-v="0">0V</button><button class="btn sm" data-pset="${i}" data-v="vcc">${simState.vcc.toFixed(1)}V</button><span class="muted" style="font-size:11px">0 ≤ ${T.vil}V · 1 ≥ ${T.vih}V</span></div>
+          <div class="row" style="margin-left:18px"><button class="btn sm${simAuto.has(i) ? ' primary' : ''}" data-auto="${i}" title="0V와 VCC를 번갈아 넣는다(구형파, 함수 발생기 대신)">${simAuto.has(i) ? '■ 구형파 멈춤' : '▶ 구형파'}</button><input type="number" step="0.1" min="0.1" max="5" value="${simAutoHz(i)}" data-autohz="${i}" style="flex:0 0 58px;width:58px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"><span class="muted" style="font-size:11px">Hz</span></div>` +
           (dead.has(i) ? `<div class="issue" data-dead="${i}" style="margin:2px 0 6px 18px;font-size:12px">이 포스트가 0이라 스위치 ${dead.get(i).length}개가 어느 쪽이든 0만 고른다. ${simState.vcc.toFixed(1)}V로 올려라.</div>` : ''); }
       return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">역할 없음 (편집기 보드 설정에서 정한다)</span></span></div>`;
     }).join('');
     pbox.querySelectorAll('[data-pv]').forEach(inp => inp.onchange = () => { const v = parseFloat(inp.value); simState.volts[+inp.dataset.pv] = isFinite(v) ? v : 0; saveSim(); renderItems(); });
-    pbox.querySelectorAll('[data-pset]').forEach(b => b.onclick = () => { simState.volts[+b.dataset.pset] = b.dataset.v==='vcc' ? simState.vcc : 0; saveSim(); renderItems(); });
+    pbox.querySelectorAll('[data-pset]').forEach(b => b.onclick = () => { simAutoStop(+b.dataset.pset); simState.volts[+b.dataset.pset] = b.dataset.v==='vcc' ? simState.vcc : 0; saveSim(); renderItems(); });
+    pbox.querySelectorAll('[data-auto]').forEach(b => b.onclick = () => { const i = +b.dataset.auto; simAuto.has(i) ? simAutoStop(i) : simAutoStart(i); renderSimPanel(); });
+    pbox.querySelectorAll('[data-autohz]').forEach(inp => inp.onchange = () => { const i = +inp.dataset.autohz, f = Math.max(0.1, Math.min(5, parseFloat(inp.value) || 0.5)); simState.autoHz = Object.assign({}, simState.autoHz, {[i]: f}); saveSim(); if(simAuto.has(i)){ simAutoStop(i); simAutoStart(i); } renderSimPanel(); });
     const vn = pbox.querySelector('[data-vneg]'); if(vn) vn.onchange = () => { const v = parseFloat(vn.value); simState.vneg = isFinite(v) ? v : -5; saveSim(); renderItems(); };
     const vi = pbox.querySelector('[data-vcc]'); if(vi) vi.onchange = () => { const v = parseFloat(vi.value); simState.vcc = isFinite(v) ? v : 5; saveSim(); renderItems(); };
   }
@@ -1932,17 +2089,19 @@ function setupSimUI(){
     <p class="muted" style="margin-top:0">설계는 편집기 창에서 한다. 여기서는 입력 전압과 스위치만 바꾼다. 편집기에서 고치면 자동으로 따라온다.</p>
     <div class="row"><label>논리 계열</label><select id="simFam"><option value="LS">74LS (떠 있는 입력 = 1)</option><option value="HC">74HC (떠 있는 입력 = 모름)</option></select></div>
     <div class="row"><button class="btn" id="simReload">다시 불러오기</button><button class="btn" id="simReset">입력 초기화</button></div>
+    <div class="row"><button class="btn" id="simMemReset" title="래치·플립플롭·카운터의 기억을 지운다. 전원을 껐다 켠 것과 같다(값은 모름에서 다시 시작).">상태 초기화 (전원 껐다 켜기)</button></div>
     <div class="muted" id="simSrc" style="font-size:11px"></div>
     <h3>전원 공급기 (바인딩 포스트)</h3>
     <div class="muted" style="font-size:11px;margin-bottom:4px">기본 입력 경로다. 입력 포스트는 보드 위에서 클릭해도 0V ↔ VCC로 바뀐다. 모든 채널의 − 단자는 GND 포스트와 공통이라고 가정한다.</div>
     <div id="simPsu"></div>
     <h3>보조 입력 (스위치)</h3><div id="simSw"></div>
     <h3>출력</h3><div id="simOut"></div>
-    <h3>계산 방식</h3><div class="muted" style="line-height:1.6">정지 상태 논리만 계산한다. 시간, 지연, 전압·전류는 보지 않는다. 플립플롭·카운터·555는 출력을 모름(X)으로 둔다.</div>`;
+    <h3>계산 방식</h3><div class="muted" style="line-height:1.6">입력을 하나 바꿀 때마다 직전 상태에서 출발해 안정될 때까지 계산한다(v1.6 순차 시뮬레이션). 그래서 래치는 값을 기억하고, 게이트로 만든 플립플롭과 7474·74112·74161·74163·74193·74194는 clock 에지에 반응한다. 게이트 지연, 펄스 폭, 전압·전류는 보지 않는다. 555는 출력을 모름(X)으로 둔다. 처음 열었을 때나 상태 초기화 직후에는 래치 값이 모름(X)이다.</div>`;
   $('#simFam').value = simState.family;
   $('#simFam').onchange = e => { simState.family = e.target.value; saveSim(); renderItems(); };
   $('#simReload').onclick = () => requestDesign(true);
-  $('#simReset').onclick = () => { simState.sw = {}; simState.volts = {}; simState.vcc = 5; simState.vneg = -5; saveSim(); renderItems(); };
+  $('#simReset').onclick = () => { simAutoStopAll(); simState.sw = {}; simState.volts = {}; simState.vcc = 5; simState.vneg = -5; saveSim(); renderItems(); };
+  $('#simMemReset').onclick = () => { simResetMemory(); renderItems(); flash('상태를 지웠다. 래치·플립플롭 값은 모름(X)에서 다시 시작한다.'); };
   document.querySelector('.tab[data-tab="add"]').hidden = true;
   document.querySelector('.tab[data-tab="settings"]').hidden = true;
   document.querySelector('.tab[data-tab="sort"]').hidden = true;
@@ -3264,6 +3423,7 @@ $('#srtRules').innerHTML = JamsilSort.RULES.map(([k, v]) => `<div><b>${k}</b> ${
     get simRes(){ return simRes; }, get simState(){ return simState; }, simIssues: () => simIssues(), compileLogicText,
     sort: {run: () => sortRun(), get state(){ return sortState; }, accept: () => sortAccept(), discard: () => sortDiscard(), preview: on => sortSetPreview(on), lib: JamsilSort, workerCount: () => sortWorkerCount(), netFP: d => sortNetFP(d)},
     wires: {get view(){ return wireView; }, set: (k, v) => setWireView(k, v), xray: on => setWireXray(on), get xrayOn(){ return wireXray; }, apply: () => applyWireView()},
+    seq: {models: SEQ_MODELS, resetMemory: () => { simResetMemory(); renderItems(); }, get memory(){ return simState.mem; }, autoStart: i => simAutoStart(i), autoStop: i => simAutoStop(i), get autoOn(){ return [...simAuto.keys()]; }},
     wvIsPow: h => wvPowerOf()(h), pinRoles: id => pinRoles(partDef(id)), deadInputs: () => simDeadInputs(), partDef: id => partDef(id)};
 })();
 </script>
