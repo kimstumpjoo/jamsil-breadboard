@@ -95,7 +95,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;m
 <body>
 <div class="app" id="app">
 <header>
-  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.6.1</span></h1>
+  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.7</span></h1>
   <input class="title" id="title" placeholder="설계 이름 (예: 3주차 반가산기)">
   <span class="sp"></span>
   <button class="hbtn" id="bSim" style="background:#6b3fd1;border-color:#8a63e6">시뮬레이션 창 열기</button>
@@ -235,7 +235,7 @@ const M = 1.5 * P;                    // 여백
 const COLS = ['A','B','C','D','E','F','G','H','I','J'];
 const COLX = [0,1,2,3,4,7,8,9,10,11]; // 스트립 안 열 위치(피치 단위), E-F 사이 홈
 const WIRE_COLORS = ['#d22f2f','#222222','#f2f2f2','#2f6fed','#1f9d55','#f0b400','#f07a1a','#8b4fd8'];
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.7';
 const STORE_AUTO = 'jamsil-bb-autosave-v1';
 const STORE_LIB = 'jamsil-bb-library-v1';
 
@@ -268,6 +268,8 @@ const BUILTIN = [
   dip('74163','4비트 동기 카운터(동기 CLR)','순차 MSI',16,'/CLR CLK A B C D ENP GND /LOAD ENT QD QC QB QA RCO VCC',16,8),
   dip('74193','4비트 업/다운 카운터','순차 MSI',16,'B QB QA DOWN UP QC QD GND D C /LOAD /CO /BO CLR A VCC',16,8),
   dip('74194','4비트 양방향 시프트 레지스터','순차 MSI',16,'/CLR SR A B C D SL GND S0 S1 CLK QD QC QB QA VCC',16,8),
+  dip('6264','8K×8 SRAM (KM6264, 0.6인치 28핀)','메모리',28,'NC A12 A7 A6 A5 A4 A3 A2 A1 A0 I/O1 I/O2 I/O3 GND I/O4 I/O5 I/O6 I/O7 I/O8 /CE1 A10 /OE A11 A9 A8 CE2 /WE VCC',28,14,6),
+  dip('5160','8K×8 SRAM (LH5160, 6264와 같은 핀 배치)','메모리',28,'NC A12 A7 A6 A5 A4 A3 A2 A1 A0 I/O1 I/O2 I/O3 GND I/O4 I/O5 I/O6 I/O7 I/O8 /CE1 A10 /OE A11 A9 A8 CE2 /WE VCC',28,14,6),
   dip('NE555','555 타이머','기타 IC',8,'GND TRIG OUT /RESET CTRL THR DIS VCC',8,1),
   dip('DIP-8','빈 8핀 IC','기타 IC',8,'1 2 3 4 5 6 7 8',null,null),
   dip('DIP-14','빈 14핀 IC','기타 IC',14,'1 2 3 4 5 6 7 8 9 10 11 12 13 14',null,null),
@@ -1085,6 +1087,11 @@ function runChecks(render){
     const d = partDef(p.partId); if(!d) return;
     const byNet = new Map();
     p.pins.forEach((h,i) => { const r = N.netOfHole(h); if(!byNet.has(r)) byNet.set(r, []); byNet.get(r).push(i); });
+    if(d.style==='dipsw'){
+      const n = p.pins.length;
+      for(let k=0;k<n/2;k++) if(N.netOfHole(p.pins[k]) === N.netOfHole(p.pins[n-1-k])) push('warn', `${p.ref}(${d.name}) ${k+1}번 스위치의 양쪽(${k+1}번·${n-k}번 핀)이 같은 넷이다. 켜도 꺼도 똑같다.`, [p.pins[k], p.pins[n-1-k]]);
+      return;
+    }
     const roles = d.kind==='dip' ? pinRoles(d) : null;
     byNet.forEach(list => {
       if(list.length < 2) return;
@@ -1457,6 +1464,35 @@ const SEQ_MODELS = {
   }
 };
 SEQ_MODELS['74194'].inputs.push('CLK');
+/* 8K×8 SRAM (6264/5160, JEDEC 28핀). /CE1=0, CE2=1일 때 선택. /WE=0이면 그동안 계속 그 주소에 I/O 값을 쓴다(레벨).
+   /WE=1, /OE=0이면 읽기: I/O에 저장값을 내보낸다. 그 밖에는 I/O가 끊김(Z). 쓴 적 없는 주소는 모름(X). 전원이 끊기면 내용이 지워진다. */
+{
+  const AD = Array.from({length:13}, (_, k) => 'A' + k), IO = Array.from({length:8}, (_, k) => 'I/O' + (k + 1));
+  const addrOf = v => { const a = AD.map(v); return a.includes('X') ? null : a.reduce((n, b, k) => n + (b << k), 0); };
+  const SRAM = {
+    desc: '8K×8 SRAM: /CE1=0·CE2=1이면 선택. /WE=0이면 A0~A12 주소에 I/O1~I/O8 값을 쓴다(그동안 I/O는 입력). /WE=1·/OE=0이면 저장값을 I/O로 읽어 낸다. 그 밖에는 I/O가 끊김(Z). 전원을 끄면 내용이 사라진다.',
+    outputs: IO, inputs: AD.concat(IO, ['/CE1', 'CE2', '/WE', '/OE']), clocks: [],
+    init: () => ({m:{}}),
+    valid: q => !!(q && typeof q === 'object' && !Array.isArray(q) && q.m && typeof q.m === 'object'),
+    async: (q, v) => {
+      const w = T3.and(T3.not(v('/CE1')), v('CE2'), T3.not(v('/WE')));
+      if(w === 0) return q;
+      const a = addrOf(v), d = IO.map(v);
+      if(a === null) return {m:{}};                                  // 주소를 모르는 채로 썼으면 어디에 썼는지 모른다 → 전부 모름
+      const old = q.m[a] || IO.map(() => 'X');
+      const nd = w === 1 ? d : d.map((x, k) => T3.merge(x, old[k]));
+      if(nd.every((x, k) => x === old[k])) return q;
+      return {m: Object.assign({}, q.m, {[a]: nd})};
+    },
+    out: (q, v) => {
+      const rd = T3.and(T3.not(v('/CE1')), v('CE2'), v('/WE'), T3.not(v('/OE'))), o = {};
+      const a = rd === 0 ? null : addrOf(v), data = a === null ? null : (q.m[a] || null);
+      IO.forEach((n, k) => { o[n] = rd === 0 ? 'Z' : rd === 'X' ? 'X' : data ? data[k] : 'X'; });
+      return o;
+    }
+  };
+  SEQ_MODELS['6264'] = SRAM; SEQ_MODELS['5160'] = SRAM;
+}
 const SEG_PAT = ['abcdef','bc','abdeg','abcdg','bcfg','acdfg','cdefg','abc','abcdefg','abcfg','deg','cdg','bfg','adfg','defg',''];
 const LOGIC_FN = {
   '7447': { inputs:['A','B','C','D','/LT','/BI','/RBI'], outputs:['a','b','c','d','e','f','g'], fn: v => {
@@ -1670,9 +1706,9 @@ function simulate(){
   const seqParts = logicParts.filter(lp => lp.c.seq);
   const mem = simMemGet();
   const seqSt = new Map(seqParts.map(lp => {
-    const m = mem.seq[lp.p.id], n0 = lp.c.seq.init().length;
-    const ok = m && m.sig === simPartSig(lp.p) && Array.isArray(m.q) && m.q.length === n0;
-    return [lp.p.id, {q: ok ? m.q.slice() : lp.c.seq.init(), prev: ok && m.prev ? Object.assign({}, m.prev) : {}}];
+    const m = mem.seq[lp.p.id], n0 = (lp.c.seq.init() || []).length;
+    const M = lp.c.seq, ok = m && m.sig === simPartSig(lp.p) && (M.valid ? M.valid(m.q) : (Array.isArray(m.q) && m.q.length === n0));
+    return [lp.p.id, {q: ok ? JSON.parse(JSON.stringify(m.q)) : M.init(), prev: ok && m.prev ? Object.assign({}, m.prev) : {}}];
   }));
   const resolve = () => {
     const drv = new Map(); const add = (n,v,src,supply) => { if(!drv.has(n)) drv.set(n, []); drv.get(n).push({v, src, supply:!!supply}); };
@@ -1763,7 +1799,7 @@ function simulate(){
         next.push([lp.p.id, q, prev]);
       }
       let moved = false;
-      for(const [id, q, prev] of next){ const s = seqSt.get(id); if(q.some((x, j) => x !== s.q[j])) moved = true; s.q = q; s.prev = prev; }
+      for(const [id, q, prev] of next){ const s = seqSt.get(id); if(JSON.stringify(q) !== JSON.stringify(s.q)) moved = true; s.q = q; s.prev = prev; }
       if(!moved || ++rounds > 40) break;               // 상태가 바뀌었으면(리플 카운터처럼 다음 소자의 clock이 될 수 있다) 다시 돈다
     }
     return {st:resolve(), it, stable, outs};
@@ -2004,7 +2040,9 @@ function simIssues(){
   R.ledNoRes.forEach(p => push('err', `${p.ref}: 직렬 저항 없이 켜진다. 실물에서는 과전류로 LED나 IC가 상할 수 있다.`, p.pins[0]));
   R.unstable.forEach(p => { const d = partDef(p.partId); push('warn', `${p.ref}(${d?d.name:''}) 출력이 끝없이 뒤집힌다(발진 루프). 정지 상태 시뮬레이션으로는 값을 정할 수 없어 X로 둔다.`, p.pins[0]); });
   R.stateDep.forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''}) 피드백(래치) 출력이 아직 한 번도 정해지지 않아 모름(X)이다. 셋/리셋하거나 clock 에지를 주면 정해지고, 그 뒤로는 값을 기억한다.`, p.pins[0]); });
-  (R.seqUnknown||[]).forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''}) 상태가 아직 정해지지 않아 출력이 모름(X)이다. CLR·PRE·LOAD를 걸거나, 입력을 정한 뒤 clock 에지를 주면 정해진다.`, p.pins[0]); });
+  (R.seqUnknown||[]).forEach(p => { const d = partDef(p.partId);
+    if(d && SEQ_MODELS[d.seqModel] && SEQ_MODELS[d.seqModel].outputs[0] === 'I/O1') push('info', `${p.ref}(${d.name}) 아직 쓴 적 없는 주소를 읽고 있어 출력이 모름(X)이다. 먼저 그 주소에 값을 써라(전원을 끄면 다시 써야 한다).`, p.pins[0]);
+    else push('info', `${p.ref}(${d?d.name:''}) 상태가 아직 정해지지 않아 출력이 모름(X)이다. CLR·PRE·LOAD를 걸거나, 입력을 정한 뒤 clock 에지를 주면 정해진다.`, p.pins[0]); });
   R.badlogic.forEach(b => push('warn', `${b.p.ref}(${b.d.name}) 동작 정의 오류: ${b.err}`, b.p.pins[0]));
   R.floating.forEach(f => push('warn', `${f.p.ref}(${f.d.name}) ${f.i+1}번 ${f.d.pinNames[f.i]} 입력이 떠 있다. ${simState.family==='LS' ? 'LS 기준 1로 계산했다. 실물에서는 불안정할 수 있다.' : 'HC 기준 값을 모른다(X).'}`, f.p.pins[f.i]));
   (R.analog||[]).forEach(p => { const d = partDef(p.partId); push('info', `${p.ref}(${d?d.name:''})는 아날로그 소자라 논리 시뮬레이션에서 출력을 모름(X)으로 둔다. 증폭·필터 동작은 계산하지 않는다.`, p.pins[0]); });
@@ -2112,7 +2150,7 @@ function setupSimUI(){
     <div id="simPsu"></div>
     <h3>보조 입력 (스위치)</h3><div id="simSw"></div>
     <h3>출력</h3><div id="simOut"></div>
-    <h3>계산 방식</h3><div class="muted" style="line-height:1.6">입력을 하나 바꿀 때마다 직전 상태에서 출발해 안정될 때까지 계산한다(v1.6 순차 시뮬레이션). 그래서 래치는 값을 기억하고, 게이트로 만든 플립플롭과 7474·74112·74161·74163·74193·74194는 clock 에지에 반응한다. 게이트 지연, 펄스 폭, 전압·전류는 보지 않는다. 555는 출력을 모름(X)으로 둔다. 처음 열었을 때나 상태 초기화 직후에는 래치 값이 모름(X)이다.</div>
+    <h3>계산 방식</h3><div class="muted" style="line-height:1.6">입력을 하나 바꿀 때마다 직전 상태에서 출발해 안정될 때까지 계산한다(v1.6 순차 시뮬레이션). 그래서 래치는 값을 기억하고, 게이트로 만든 플립플롭과 7474·74112·74161·74163·74193·74194는 clock 에지에 반응한다. 6264·5160 SRAM은 쓴 내용을 기억한다(전원을 끄면 사라진다). 게이트 지연, 펄스 폭, 전압·전류는 보지 않는다. 555는 출력을 모름(X)으로 둔다. 처음 열었을 때나 상태 초기화 직후에는 래치 값이 모름(X)이다.</div>
     <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:600">순차 회로(래치·플립플롭) 보는 법</summary><ol class="muted" style="padding-left:18px;line-height:1.6;margin:6px 0">
       <li>처음에는 래치·플립플롭 출력이 <b>모름</b>(보라)이다. 셋·리셋·CLR을 하거나 clock을 한 번 넣으면 정해지고, 그 뒤로는 값을 기억한다.</li>
       <li>clock은 clock이 물린 입력 포스트(예: FG)의 <b>0V / 5.0V 버튼</b>으로 한 번씩 넣는다. 5V→0V로 누르는 순간이 하강 에지, 0V→5V가 상승 에지다. 보드 위 포스트를 클릭해도 된다.</li>
