@@ -95,7 +95,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;m
 <body>
 <div class="app" id="app">
 <header>
-  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.6</span></h1>
+  <h1>잠실 브레드보드 편집기 <span style="font-weight:400;opacity:.6;font-size:12px">v1.6.1</span></h1>
   <input class="title" id="title" placeholder="설계 이름 (예: 3주차 반가산기)">
   <span class="sp"></span>
   <button class="hbtn" id="bSim" style="background:#6b3fd1;border-color:#8a63e6">시뮬레이션 창 열기</button>
@@ -235,7 +235,7 @@ const M = 1.5 * P;                    // 여백
 const COLS = ['A','B','C','D','E','F','G','H','I','J'];
 const COLX = [0,1,2,3,4,7,8,9,10,11]; // 스트립 안 열 위치(피치 단위), E-F 사이 홈
 const WIRE_COLORS = ['#d22f2f','#222222','#f2f2f2','#2f6fed','#1f9d55','#f0b400','#f07a1a','#8b4fd8'];
-const APP_VERSION = '1.6';
+const APP_VERSION = '1.6.1';
 const STORE_AUTO = 'jamsil-bb-autosave-v1';
 const STORE_LIB = 'jamsil-bb-library-v1';
 
@@ -1829,6 +1829,8 @@ const simAuto = new Map();
 function simAutoHz(i){ const f = simState.autoHz && simState.autoHz[i]; return typeof f === 'number' && isFinite(f) ? f : 0.5; }
 function simAutoStart(i){
   if(simAuto.has(i)) return;
+  { const N = nets(), n = N.netOfHole('POST' + i), refs = S.parts.filter(p => { const d = partDef(p.partId); return d && d.sim && d.sim.type === 'spdt' && (N.netOfHole(p.pins[0]) === n || N.netOfHole(p.pins[2]) === n); }).map(p => p.ref);
+    if(refs.length) flash(`${S.settings.posts[i].label}에는 스위치 ${refs.length}개(${refs.join(', ')})가 물려 있다. 구형파는 보통 clock 입력 포스트(함수 발생기 자리)에 켠다.`); }
   const half = Math.max(100, 500 / simAutoHz(i));
   simAuto.set(i, setInterval(() => {
     const T = THRESH[simState.family] || THRESH.LS;
@@ -2031,16 +2033,27 @@ function renderSimPanel(){
   if(pbox){
     const T = THRESH[simState.family] || THRESH.LS;
     const dead = new Map(simDeadInputs().map(x => [x.i, x.refs]));
+    // 구성(포스트 역할, 구형파 켜짐, 경고 줄)이 그대로면 값만 바꾸고 칸은 다시 그리지 않는다(구형파 중 버튼이 흔들리지 않게)
+    const psuKey = JSON.stringify([S.settings.posts.map(po => [po.role, po.label, po.color]), [...simAuto.keys()], [...dead.keys()].filter(i => !simAuto.has(i)), simState.vcc, simState.vneg, simState.family, simState.autoHz || {}]);
+    if(pbox._key === psuKey){
+      S.settings.posts.forEach((po, i) => {
+        if(po.role !== 'IN') return;
+        const v = postVolt(i), lv = voltToLogic(v), inp = pbox.querySelector(`[data-pv="${i}"]`), lab = pbox.querySelector(`[data-lv="${i}"]`);
+        if(inp && document.activeElement !== inp) inp.value = v;
+        if(lab){ lab.textContent = `→ ${lv}`; lab.style.color = lv===1?'#d22f2f':lv===0?'#2f6fed':'#a24be0'; }
+      });
+    } else {
+    pbox._key = psuKey;
     pbox.innerHTML = S.settings.posts.map((po,i) => {
       const dot = `<span class="lg" style="background:${esc(po.color)}"></span>`;
       if(po.role==='VCC') return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">VCC</span></span><input type="number" step="0.05" min="0" max="7" value="${simState.vcc}" data-vcc style="width:70px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"> V</div>`;
       if(po.role==='GND') return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">GND · 0V 기준</span></span></div>`;
       if(po.role==='VNEG') return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">V− (음전원)</span></span><input type="number" step="0.5" min="-20" max="0" value="${simState.vneg}" data-vneg style="width:70px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"> V</div>`;
       if(po.role==='IN'){ const v = postVolt(i), lv = voltToLogic(v);
-        return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">입력</span> <b style="color:${lv===1?'#d22f2f':lv===0?'#2f6fed':'#a24be0'}">→ ${lv}</b></span><input type="number" step="0.1" min="-1" max="12" value="${v}" data-pv="${i}" style="width:62px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"> V</div>
+        return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">입력</span> <b data-lv="${i}" style="color:${lv===1?'#d22f2f':lv===0?'#2f6fed':'#a24be0'}">→ ${lv}</b></span><input type="number" step="0.1" min="-1" max="12" value="${v}" data-pv="${i}" style="width:62px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"> V</div>
           <div class="row" style="margin-left:18px"><button class="btn sm" data-pset="${i}" data-v="0">0V</button><button class="btn sm" data-pset="${i}" data-v="vcc">${simState.vcc.toFixed(1)}V</button><span class="muted" style="font-size:11px">0 ≤ ${T.vil}V · 1 ≥ ${T.vih}V</span></div>
           <div class="row" style="margin-left:18px"><button class="btn sm${simAuto.has(i) ? ' primary' : ''}" data-auto="${i}" title="0V와 VCC를 번갈아 넣는다(구형파, 함수 발생기 대신)">${simAuto.has(i) ? '■ 구형파 멈춤' : '▶ 구형파'}</button><input type="number" step="0.1" min="0.1" max="5" value="${simAutoHz(i)}" data-autohz="${i}" style="flex:0 0 58px;width:58px;border:1px solid var(--line);border-radius:6px;padding:3px 5px"><span class="muted" style="font-size:11px">Hz</span></div>` +
-          (dead.has(i) ? `<div class="issue" data-dead="${i}" style="margin:2px 0 6px 18px;font-size:12px">이 포스트가 0이라 스위치 ${dead.get(i).length}개가 어느 쪽이든 0만 고른다. ${simState.vcc.toFixed(1)}V로 올려라.</div>` : ''); }
+          (dead.has(i) && !simAuto.has(i) ? `<div class="issue" data-dead="${i}" style="margin:2px 0 6px 18px;font-size:12px">이 포스트가 0이라 스위치 ${dead.get(i).length}개가 어느 쪽이든 0만 고른다. ${simState.vcc.toFixed(1)}V로 올려라.</div>` : ''); }
       return `<div class="row">${dot}<span style="flex:1"><b>${esc(po.label)}</b> <span class="muted">역할 없음 (편집기 보드 설정에서 정한다)</span></span></div>`;
     }).join('');
     pbox.querySelectorAll('[data-pv]').forEach(inp => inp.onchange = () => { const v = parseFloat(inp.value); simState.volts[+inp.dataset.pv] = isFinite(v) ? v : 0; saveSim(); renderItems(); });
@@ -2049,6 +2062,7 @@ function renderSimPanel(){
     pbox.querySelectorAll('[data-autohz]').forEach(inp => inp.onchange = () => { const i = +inp.dataset.autohz, f = Math.max(0.1, Math.min(5, parseFloat(inp.value) || 0.5)); simState.autoHz = Object.assign({}, simState.autoHz, {[i]: f}); saveSim(); if(simAuto.has(i)){ simAutoStop(i); simAutoStart(i); } renderSimPanel(); });
     const vn = pbox.querySelector('[data-vneg]'); if(vn) vn.onchange = () => { const v = parseFloat(vn.value); simState.vneg = isFinite(v) ? v : -5; saveSim(); renderItems(); };
     const vi = pbox.querySelector('[data-vcc]'); if(vi) vi.onchange = () => { const v = parseFloat(vi.value); simState.vcc = isFinite(v) ? v : 5; saveSim(); renderItems(); };
+    }
   }
   const box = $('#simSw'); if(!box) return;
   const rows = [];
@@ -2060,7 +2074,8 @@ function renderSimPanel(){
     if(d.sim.type==='dipsw'){ const a = Array.isArray(simState.sw[p.id]) ? simState.sw[p.id] : []; st = Array.from({length:p.pins.length/2}, (_,k) => a[k] ? '1' : '0').join(''); }
     rows.push(`<div class="row"><span style="flex:1"><b>${esc(p.ref)}</b> <span class="muted">${esc(d.name)}</span></span><button class="btn sm" data-sw="${p.id}">${esc(st)}</button></div>`);
   });
-  box.innerHTML = rows.join('') || '<div class="muted">스위치 없음.</div>';
+  const swHtml = rows.join('') || '<div class="muted">스위치 없음.</div>';
+  if(box._html !== swHtml){ box._html = swHtml; box.innerHTML = swHtml; }      // 바뀐 게 없으면 버튼을 다시 만들지 않는다(누르는 중에 사라지지 않게)
   box.querySelectorAll('[data-sw]').forEach(b => b.onclick = () => {
     const p = S.parts.find(x => x.id===b.dataset.sw); const d = partDef(p.partId);
     if(d.sim.type==='dipsw'){ // 버튼으로는 1번부터 순서대로 하나씩 켜지 않고, 전체 반전
@@ -2076,7 +2091,8 @@ function renderSimPanel(){
     if(d.kind==='two' && d.style==='led'){ const s = simRes && simRes.leds.get(p.id); lines.push(`<div class="row"><span style="flex:1"><b>${esc(p.ref)}</b> <span class="muted">${esc(d.name)}</span></span><b style="color:${s==='on'?'var(--ok)':s==='x'?'#a24be0':'var(--muted)'}">${s==='on'?'켜짐':s==='x'?'모름':'꺼짐'}</b></div>`); }
     if(d.style==='seg7'){ const l = (simRes && simRes.segs.get(p.id)) || {}; const on = Object.keys(l).filter(k => l[k]===true); lines.push(`<div class="row"><span style="flex:1"><b>${esc(p.ref)}</b> <span class="muted">${esc(d.name)}</span></span><b>${on.length ? esc(on.join('')) : '꺼짐'}</b></div>`); }
   });
-  out.innerHTML = lines.join('') || '<div class="muted">LED나 7세그먼트가 없다.</div>';
+  const outHtml = lines.join('') || '<div class="muted">LED나 7세그먼트가 없다.</div>';
+  if(out._html !== outHtml){ out._html = outHtml; out.innerHTML = outHtml; }
 }
 function setupSimUI(){
   document.title = '잠실 시뮬레이션';
@@ -2096,7 +2112,13 @@ function setupSimUI(){
     <div id="simPsu"></div>
     <h3>보조 입력 (스위치)</h3><div id="simSw"></div>
     <h3>출력</h3><div id="simOut"></div>
-    <h3>계산 방식</h3><div class="muted" style="line-height:1.6">입력을 하나 바꿀 때마다 직전 상태에서 출발해 안정될 때까지 계산한다(v1.6 순차 시뮬레이션). 그래서 래치는 값을 기억하고, 게이트로 만든 플립플롭과 7474·74112·74161·74163·74193·74194는 clock 에지에 반응한다. 게이트 지연, 펄스 폭, 전압·전류는 보지 않는다. 555는 출력을 모름(X)으로 둔다. 처음 열었을 때나 상태 초기화 직후에는 래치 값이 모름(X)이다.</div>`;
+    <h3>계산 방식</h3><div class="muted" style="line-height:1.6">입력을 하나 바꿀 때마다 직전 상태에서 출발해 안정될 때까지 계산한다(v1.6 순차 시뮬레이션). 그래서 래치는 값을 기억하고, 게이트로 만든 플립플롭과 7474·74112·74161·74163·74193·74194는 clock 에지에 반응한다. 게이트 지연, 펄스 폭, 전압·전류는 보지 않는다. 555는 출력을 모름(X)으로 둔다. 처음 열었을 때나 상태 초기화 직후에는 래치 값이 모름(X)이다.</div>
+    <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:600">순차 회로(래치·플립플롭) 보는 법</summary><ol class="muted" style="padding-left:18px;line-height:1.6;margin:6px 0">
+      <li>처음에는 래치·플립플롭 출력이 <b>모름</b>(보라)이다. 셋·리셋·CLR을 하거나 clock을 한 번 넣으면 정해지고, 그 뒤로는 값을 기억한다.</li>
+      <li>clock은 clock이 물린 입력 포스트(예: FG)의 <b>0V / 5.0V 버튼</b>으로 한 번씩 넣는다. 5V→0V로 누르는 순간이 하강 에지, 0V→5V가 상승 에지다. 보드 위 포스트를 클릭해도 된다.</li>
+      <li><b>▶ 구형파</b>는 그 포스트를 자동으로 0V↔5V 반복한다(함수 발생기 대신). 스위치가 물린 포스트(예: CH2)에는 켜지 마라.</li>
+      <li>D 같은 데이터 스위치는 clock 사이에 바꾸고, 다음 에지에서 출력이 바뀌는지 본다.</li>
+      <li>처음부터 다시 보려면 <b>상태 초기화</b>.</li></ol></details>`;
   $('#simFam').value = simState.family;
   $('#simFam').onchange = e => { simState.family = e.target.value; saveSim(); renderItems(); };
   $('#simReload').onclick = () => requestDesign(true);
